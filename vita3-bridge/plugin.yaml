@@ -1,0 +1,9 @@
+name: vita3-bridge
+version: 0.2.0
+description: >-
+  Presents vita3's supplement-stack tools to a Hermes agent under its own
+  `vita3` toolset, forwarding each call to vita-srv-v3's /api/agent/tools with
+  the profile's own VITA3_USER_ID and the dispatch session id. Holds no logic
+  beyond forwarding: scope, vocabulary, ownership and identity are all enforced
+  server-side.
+author: alek

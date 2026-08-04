@@ -1,17 +1,4 @@
 name: sonarr
 version: "1.0.0"
 description: Sonarr — series library, search, add, command, calendar, queue.
-provides_tools:
-  - sonarr_library
-  - sonarr_search
-  - sonarr_add
-  - sonarr_command
-  - sonarr_calendar
-  - sonarr_queue
-  - sonarr_wanted
-  - sonarr_rootfolder
-  - sonarr_qualityprofile
-requires_env:
-  - SONARR_API_KEY
-  - SONARR_URL
-
+author: alek

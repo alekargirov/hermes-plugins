@@ -1,16 +1,4 @@
 name: nzb
 version: "1.0.0"
 description: NZBGet JSON-RPC — queue, history, add, delete, pause, resume.
-provides_tools:
-  - nzb_status
-  - nzb_queue
-  - nzb_history
-  - nzb_add
-  - nzb_delete
-  - nzb_pause
-  - nzb_resume
-requires_env:
-  - NZB_PASSWORD
-  - NZB_URL
-  - NZB_USER
-
+author: alek

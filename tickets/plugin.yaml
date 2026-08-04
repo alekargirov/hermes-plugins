@@ -1,17 +1,4 @@
 name: tickets
 version: "1.0.0"
 description: Internal ticket system — create, list, get, update, assign, close.
-provides_tools:
-  - tickets_create
-  - tickets_mine
-  - tickets_get
-  - tickets_update
-  - tickets_comment
-  - tickets_list
-  - tickets_assign
-  - tickets_close
-  - tickets_reopen
-requires_env:
-  - TICKETS_URL
-  - USER_ID
-
+author: alek

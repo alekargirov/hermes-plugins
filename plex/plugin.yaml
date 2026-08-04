@@ -1,12 +1,4 @@
 name: plex
 version: "1.0.0"
 description: Plex Media Server — sessions, on-deck, library search.
-provides_tools:
-  - plex_now_playing
-  - plex_on_deck
-  - plex_recently_added
-  - plex_search
-requires_env:
-  - PLEX_TOKEN
-  - PLEX_URL
-
+author: alek

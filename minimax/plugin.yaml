@@ -1,11 +1,4 @@
 name: minimax
 version: "1.0.0"
 description: MiniMax — web search, image understanding, image gen, music gen.
-provides_tools:
-  - web_search
-  - understand_image
-  - generate_image
-  - generate_music
-requires_env:
-  - MINIMAX_API_KEY
-
+author: alek

@@ -1,12 +1,4 @@
 name: tmdb
 version: "1.0.0"
 description: TMDB — movie and TV search, details, credits, popular, top-rated.
-provides_tools:
-  - tmdb_search
-  - tmdb_get_details
-  - tmdb_get_credits
-  - tmdb_get_popular
-  - tmdb_get_top_rated
-requires_env:
-  - TMDB_API_KEY
-
+author: alek

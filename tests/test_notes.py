@@ -132,3 +132,105 @@ def test_trailing_slash_on_notes_url_does_not_double_up(monkeypatch):
     _handler_for(ctx, "notes_tree")({})
 
     assert seen["url"] == "https://notes.pica.win/api/v2/tree"
+
+
+def test_write_posts_json_body_with_the_api_key(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["url"] = req.full_url
+        seen["method"] = req.get_method()
+        seen["body"] = json.loads(req.data.decode())
+        seen["headers"] = {k.lower(): v for k, v in req.header_items()}
+        return _Resp(b'{"ok": true}')
+
+    monkeypatch.setattr(notes.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("NOTES_URL", "http://notes:3000")
+    monkeypatch.setenv("NOTES_API_KEY", "claude")
+
+    ctx = FakeCtx()
+    notes.register(ctx)
+    _handler_for(ctx, "notes_write")({"path": "claude/scratch", "content": "hello"})
+
+    assert seen["url"] == "http://notes:3000/api/v2/notes/write"
+    assert seen["method"] == "POST"
+    assert seen["body"] == {"path": "claude/scratch", "content": "hello"}
+    assert seen["headers"]["x-api-key"] == "claude"
+    assert seen["headers"]["content-type"] == "application/json"
+
+
+@pytest.mark.parametrize(
+    "tool,args,expected_path",
+    [
+        ("notes_comment_reply",
+         {"path": "claude/x", "anchor": "a1b2c3", "body": "ack"},
+         "/api/v2/notes/comments/reply"),
+        ("notes_move", {"from": "claude/a", "to": "claude/b"}, "/api/v2/notes/move"),
+        ("notes_delete", {"path": "claude/a"}, "/api/v2/notes/delete"),
+    ],
+)
+def test_write_tools_post_their_args_as_the_body(monkeypatch, tool, args, expected_path):
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["url"] = req.full_url
+        seen["method"] = req.get_method()
+        seen["body"] = json.loads(req.data.decode())
+        return _Resp(b'{"ok": true}')
+
+    monkeypatch.setattr(notes.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("NOTES_URL", "http://notes:3000")
+    monkeypatch.setenv("NOTES_API_KEY", "claude")
+
+    ctx = FakeCtx()
+    notes.register(ctx)
+    _handler_for(ctx, tool)(args)
+
+    assert seen["url"] == "http://notes:3000" + expected_path
+    assert seen["method"] == "POST"
+    assert seen["body"] == args
+
+
+def test_http_error_becomes_a_refusal_not_an_exception(monkeypatch):
+    """A 403 from vault.ts (writing outside your folder) must reach the model as
+    a readable {ok:false}, so it can correct itself instead of the turn dying."""
+    import io
+    import urllib.error
+
+    def fake_urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(
+            req.full_url, 403, "Forbidden", {},
+            io.BytesIO(b'{"error":"key `claude` may not write `fin/x`"}'),
+        )
+
+    monkeypatch.setattr(notes.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("NOTES_URL", "http://notes:3000")
+    monkeypatch.setenv("NOTES_API_KEY", "claude")
+
+    ctx = FakeCtx()
+    notes.register(ctx)
+    out = json.loads(_handler_for(ctx, "notes_write")({"path": "fin/x", "content": "nope"}))
+
+    assert out["ok"] is False
+    assert "403" in out["message"]
+    assert "may not write" in out["message"]
+
+
+def test_unreachable_host_becomes_a_refusal_not_an_exception(monkeypatch):
+    def fake_urlopen(req, timeout=None):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(notes.urllib.request, "urlopen", fake_urlopen)
+
+    ctx = FakeCtx()
+    notes.register(ctx)
+    out = json.loads(_handler_for(ctx, "notes_tree")({}))
+
+    assert out["ok"] is False
+    assert "unreachable" in out["message"]
+
+
+def test_every_tool_name_is_unique_and_prefixed():
+    names = [t[0] for t in notes.TOOLS]
+    assert len(names) == len(set(names))
+    assert all(n.startswith("notes_") for n in names)

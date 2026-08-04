@@ -135,6 +135,62 @@ TOOLS = [
         "/api/v2/notes/comments",
         "query",
     ),
+    (
+        "notes_write",
+        "Create or update a note. Path must be under YOUR top-level folder (your "
+        "username is the write key; e.g. claude/...). Content is a markdown string. "
+        'Path is "folder/Title" — no .md. Preserve any "^a1b2c3" block markers the '
+        "note came with: they anchor existing comments, and dropping them makes the "
+        "server re-attach by matching text, or orphan the thread when it can't.",
+        _schema(
+            {
+                "path": _s('Note path under your folder (e.g. "claude/apps/notes-srv/overview")'),
+                "content": _s("Full note contents (markdown)"),
+            },
+            ["path", "content"],
+        ),
+        "POST",
+        "/api/v2/notes/write",
+        "body",
+    ),
+    (
+        "notes_comment_reply",
+        "Reply to a comment thread on a note. Pass the anchor exactly as notes_read "
+        'shows it in brackets — "[^a1b2c3]" means anchor "a1b2c3". Your reply is '
+        "attributed to you by name. You can only answer threads a human opened; "
+        "replying on an anchor with no thread is rejected, and there is no way to "
+        "start one.",
+        _schema(
+            {
+                "path": _s('Note path, "folder/Title" — no .md'),
+                "anchor": _s('Block anchor of the thread, without the caret (e.g. "a1b2c3")'),
+                "body": _s("The reply text"),
+            },
+            ["path", "anchor", "body"],
+        ),
+        "POST",
+        "/api/v2/notes/comments/reply",
+        "body",
+    ),
+    (
+        "notes_move",
+        'Move or rename a note. Both paths must be under your own top-level folder. Paths are "folder/Title" — no .md.',
+        _schema(
+            {"from": _s("Current path"), "to": _s("New path")},
+            ["from", "to"],
+        ),
+        "POST",
+        "/api/v2/notes/move",
+        "body",
+    ),
+    (
+        "notes_delete",
+        'Delete a note by path. Must be under your own top-level folder. Path is "folder/Title" — no .md.',
+        _schema({"path": _s("Path of the note to delete")}, ["path"]),
+        "POST",
+        "/api/v2/notes/delete",
+        "body",
+    ),
 ]
 
 

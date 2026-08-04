@@ -99,6 +99,42 @@ TOOLS = [
         "/api/v2/tree",
         "query",
     ),
+    (
+        "notes_list",
+        "List direct subfolders and notes at one folder level. Omit path for vault root.",
+        _schema({"path": _s('Folder path (e.g. "claude/conventions"). Empty = vault root.')}),
+        "GET",
+        "/api/v2/folders/list",
+        "query",
+    ),
+    (
+        "notes_read",
+        'Read a note by path. Path is "folder/Title" — no .md extension (e.g. '
+        '"claude/conventions/INDEX"). Returns the markdown AND every comment thread '
+        "on it (see commentsText for a readable rendering). Comments are anchored by "
+        '"^a1b2c3" markers in the content: KEEP those markers when you rewrite a '
+        "note, they are what holds each comment to its paragraph.",
+        _schema({"path": _s("Note path (folder/Title, no .md)")}, ["path"]),
+        "GET",
+        "/api/v2/notes/read",
+        "query",
+    ),
+    (
+        "notes_search",
+        "Full-text search (case-insensitive substring over title+content) across the notes vault. Returns matching notes with full content.",
+        _schema({"q": _s("Search query")}, ["q"]),
+        "GET",
+        "/api/v2/notes/search",
+        "query",
+    ),
+    (
+        "notes_comments",
+        "List the comment threads on a note (anchors, comments, replies) without its content. notes_read already includes these — use this only when you want the threads alone.",
+        _schema({"path": _s('Note path, "folder/Title" — no .md')}, ["path"]),
+        "GET",
+        "/api/v2/notes/comments",
+        "query",
+    ),
 ]
 
 

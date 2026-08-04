@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 import notes
 
 
@@ -59,3 +61,74 @@ def test_tree_is_a_get_against_api_v2(monkeypatch):
     assert seen["url"] == "http://notes:3000/api/v2/tree"
     assert seen["method"] == "GET"
     assert json.loads(out) == {"tree": []}
+
+
+@pytest.mark.parametrize(
+    "tool,args,expected_url",
+    [
+        ("notes_list", {"path": "claude"},
+         "http://notes:3000/api/v2/folders/list?path=claude"),
+        ("notes_list", {},
+         "http://notes:3000/api/v2/folders/list"),
+        ("notes_read", {"path": "claude/overview"},
+         "http://notes:3000/api/v2/notes/read?path=claude%2Foverview"),
+        ("notes_search", {"q": "hermes"},
+         "http://notes:3000/api/v2/notes/search?q=hermes"),
+        ("notes_comments", {"path": "claude/overview"},
+         "http://notes:3000/api/v2/notes/comments?path=claude%2Foverview"),
+    ],
+)
+def test_read_tools_build_the_right_url(monkeypatch, tool, args, expected_url):
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["url"] = req.full_url
+        seen["method"] = req.get_method()
+        return _Resp(b"{}")
+
+    monkeypatch.setattr(notes.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("NOTES_URL", "http://notes:3000")
+    monkeypatch.setenv("NOTES_API_KEY", "claude")
+
+    ctx = FakeCtx()
+    notes.register(ctx)
+    _handler_for(ctx, tool)(args)
+
+    assert seen["url"] == expected_url
+    assert seen["method"] == "GET"
+
+
+def test_empty_optional_args_are_dropped_not_sent_blank(monkeypatch):
+    """notes_list with no path must hit the bare URL — `?path=` is a different
+    request to notes-srv than no query at all (bare = vault root)."""
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["url"] = req.full_url
+        return _Resp(b"{}")
+
+    monkeypatch.setattr(notes.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("NOTES_URL", "http://notes:3000")
+
+    ctx = FakeCtx()
+    notes.register(ctx)
+    _handler_for(ctx, "notes_list")({"path": ""})
+
+    assert seen["url"] == "http://notes:3000/api/v2/folders/list"
+
+
+def test_trailing_slash_on_notes_url_does_not_double_up(monkeypatch):
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["url"] = req.full_url
+        return _Resp(b"{}")
+
+    monkeypatch.setattr(notes.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("NOTES_URL", "https://notes.pica.win/")
+
+    ctx = FakeCtx()
+    notes.register(ctx)
+    _handler_for(ctx, "notes_tree")({})
+
+    assert seen["url"] == "https://notes.pica.win/api/v2/tree"

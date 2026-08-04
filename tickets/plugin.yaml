@@ -1,4 +1,0 @@
-name: tickets
-version: "1.0.0"
-description: Internal ticket system — create, list, get, update, assign, close.
-author: alek

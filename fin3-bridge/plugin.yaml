@@ -1,8 +1,0 @@
-name: fin3-bridge
-version: 0.1.0
-description: >-
-  Forwards the shipped fin3_* tool set (registered under the `todo` toolset —
-  NOT `fin3`, see README) to fin-srv-v3's POST /api/agent/tools, carrying the
-  dispatch session_id (the turn id) and the profile's own FIN3_USER_ID. Holds
-  no logic beyond forwarding; identity is enforced server-side.
-author: alek

@@ -1,0 +1,17 @@
+name: lidarr
+version: "1.0.0"
+description: Lidarr — artist library, search, add, delete, queue, profiles.
+provides_tools:
+  - lidarr_library
+  - lidarr_search
+  - lidarr_add
+  - lidarr_delete
+  - lidarr_queue
+  - lidarr_wanted
+  - lidarr_rootfolder
+  - lidarr_qualityprofile
+  - lidarr_metadataprofile
+requires_env:
+  - LIDARR_API_KEY
+  - LIDARR_URL
+

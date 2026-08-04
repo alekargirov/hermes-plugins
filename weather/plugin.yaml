@@ -1,0 +1,10 @@
+name: weather
+version: "1.0.0"
+description: Open-Meteo weather — current conditions and daily forecast.
+provides_tools:
+  - weather_current
+  - weather_forecast
+requires_env:
+  - WEATHER_LAT
+  - WEATHER_LON
+

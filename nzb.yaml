@@ -1,0 +1,65 @@
+tools:
+  - name: nzb_status
+    description: NZBGet server status — download rate, remaining size, paused state, free disk space.
+    group: arr
+    method: POST
+    url: "{env.NZB_URL}{env.NZB_USER}:{env.NZB_PASSWORD}/jsonrpc"
+    body: '{"method":"status"}'
+
+  - name: nzb_queue
+    description: List the current NZBGet download queue (active and queued items with NZBID, name, size, progress). Use NZBID with nzb_delete.
+    group: arr
+    method: POST
+    url: "{env.NZB_URL}{env.NZB_USER}:{env.NZB_PASSWORD}/jsonrpc"
+    body: '{"method":"listgroups"}'
+
+  - name: nzb_history
+    description: NZBGet download history (completed/failed items). Returns the full history — can be long.
+    group: arr
+    method: POST
+    url: "{env.NZB_URL}{env.NZB_USER}:{env.NZB_PASSWORD}/jsonrpc"
+    body: '{"method":"history","params":[false]}'
+
+  - name: nzb_add
+    description: Add a download to NZBGet by NZB file URL. NZBGet fetches the URL itself. Optionally set a category (e.g. movies, tv, music) and a name.
+    group: arr
+    method: POST
+    url: "{env.NZB_URL}{env.NZB_USER}:{env.NZB_PASSWORD}/jsonrpc"
+    body: '{"method":"append","params":["{arg.name|}","{arg.url}","{arg.category|}",0,false,false,"",0,"SCORE"]}'
+    args:
+      url:
+        type: string
+        description: Direct URL to the .nzb file
+        required: true
+      category:
+        type: string
+        description: NZBGet category (optional, e.g. movies, tv, music)
+      name:
+        type: string
+        description: Filename to store as (optional — derived from the URL if empty)
+
+  - name: nzb_delete
+    description: Delete a queue item from NZBGet by NZBID (from nzb_queue). Removes the download, keeps nothing.
+    group: arr
+    method: POST
+    url: "{env.NZB_URL}{env.NZB_USER}:{env.NZB_PASSWORD}/jsonrpc"
+    body: '{"method":"editqueue","params":["GroupDelete",0,"",[{arg.id}]]}'
+    args:
+      id:
+        type: number
+        description: NZBID from nzb_queue
+        required: true
+
+  - name: nzb_pause
+    description: Pause all NZBGet downloads.
+    group: arr
+    method: POST
+    url: "{env.NZB_URL}{env.NZB_USER}:{env.NZB_PASSWORD}/jsonrpc"
+    body: '{"method":"pausedownload"}'
+
+  - name: nzb_resume
+    description: Resume all NZBGet downloads.
+    group: arr
+    method: POST
+    url: "{env.NZB_URL}{env.NZB_USER}:{env.NZB_PASSWORD}/jsonrpc"
+    body: '{"method":"resumedownload"}'

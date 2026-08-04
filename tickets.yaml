@@ -1,0 +1,131 @@
+tools:
+  - name: tickets_create
+    group: tickets
+    description: |
+      File a ticket for the admin's attention. The admin gets a Telegram alert
+      and reviews via the pica UI. Use this when you hit a bug, need a tool
+      capability you don't have, or want a human decision before proceeding.
+    method: POST
+    url: "{env.TICKETS_URL}/api/tickets/create"
+    headers:
+      X-User-Id: "{user.id}"
+    args:
+      subject:
+        type: string
+        description: Short, specific subject line
+        required: true
+      body:
+        type: string
+        description: Detailed description (markdown OK; include what you tried, what failed, what you'd like)
+        required: false
+      category:
+        type: string
+        description: "One of: tool, bug, other (default 'other')"
+        required: false
+
+  - name: tickets_mine
+    group: tickets
+    description: |
+      List tickets currently assigned to you (the calling agent). Use this to
+      pick up work the admin has routed your way. Returns only open tickets
+      where the latest assign event names your user id.
+    method: GET
+    url: "{env.TICKETS_URL}/api/tickets/mine"
+    headers:
+      X-User-Id: "{user.id}"
+
+  - name: tickets_get
+    group: tickets
+    description: |
+      Read a ticket by id, including its event timeline (comments, assignments,
+      close/reopen). Accessible to admin, the reporter, or the current assignee.
+    method: GET
+    url: "{env.TICKETS_URL}/api/tickets/get?id={arg.id}"
+    headers:
+      X-User-Id: "{user.id}"
+    args:
+      id: { type: number, required: true }
+
+  - name: tickets_update
+    group: tickets
+    description: |
+      Edit an existing ticket's subject, body, or category. Admin, the reporter,
+      and the current assignee may update. Use this when a ticket needs new
+      findings added or its subject sharpened — preserves the event timeline
+      instead of closing and re-filing.
+    method: POST
+    url: "{env.TICKETS_URL}/api/tickets/update"
+    headers:
+      X-User-Id: "{user.id}"
+    args:
+      id:       { type: number, required: true }
+      subject:  { type: string, required: false, description: "New subject line" }
+      body:     { type: string, required: false, description: "New body (markdown OK)" }
+      category: { type: string, required: false, description: "One of: tool, bug, other" }
+
+  - name: tickets_comment
+    group: tickets
+    description: |
+      Add a comment to a ticket. The admin, the reporter, and the current
+      assignee may comment. Use this to provide updates, ask questions, or
+      record resolution notes.
+    method: POST
+    url: "{env.TICKETS_URL}/api/tickets/comment"
+    headers:
+      X-User-Id: "{user.id}"
+    args:
+      id:   { type: number, required: true }
+      body: { type: string, required: true, description: "Comment body" }
+
+  - name: tickets_list
+    group: tickets
+    description: |
+      List all tickets (admin only). Filter by status. Returns each ticket's
+      latest assignee + reporter username for context.
+    method: GET
+    url: "{env.TICKETS_URL}/api/tickets/list?status={arg.status}"
+    headers:
+      X-User-Id: "{user.id}"
+    args:
+      status:
+        type: string
+        description: "One of: open (default), closed, all"
+        required: false
+
+  - name: tickets_assign
+    group: tickets
+    description: |
+      Assign a ticket to an agent (admin only). Pass either `agent` (username)
+      or `assigneeId` (numeric user id). The agent will see this ticket in
+      tickets_mine. Optional `note` is recorded in the timeline.
+    method: POST
+    url: "{env.TICKETS_URL}/api/tickets/assign"
+    headers:
+      X-User-Id: "{user.id}"
+    args:
+      id:         { type: number, required: true }
+      agent:      { type: string, required: false, description: "Agent username (preferred)" }
+      assigneeId: { type: number, required: false, description: "Numeric user id (alternative)" }
+      note:       { type: string, required: false }
+
+  - name: tickets_close
+    group: tickets
+    description: Close an open ticket (admin only). Records optional note in the timeline.
+    method: POST
+    url: "{env.TICKETS_URL}/api/tickets/close"
+    headers:
+      X-User-Id: "{user.id}"
+    args:
+      id:   { type: number, required: true }
+      note: { type: string, required: false }
+
+  - name: tickets_reopen
+    group: tickets
+    description: Reopen a closed ticket (admin only).
+    method: POST
+    url: "{env.TICKETS_URL}/api/tickets/reopen"
+    headers:
+      X-User-Id: "{user.id}"
+    args:
+      id:   { type: number, required: true }
+      note: { type: string, required: false }

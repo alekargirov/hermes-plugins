@@ -1,0 +1,20 @@
+tools:
+  - name: weather_current
+    description: Get current weather conditions (temperature, humidity, wind, visibility) for the configured location.
+    group: weather
+    method: GET
+    url: "https://api.open-meteo.com/v1/forecast?latitude={env.WEATHER_LAT}&longitude={env.WEATHER_LON}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,visibility&wind_speed_unit=kmh"
+    headers:
+      Accept: "application/json"
+
+  - name: weather_forecast
+    description: Get daily weather forecast for the configured location. days defaults to 3, max 7.
+    group: weather
+    method: GET
+    url: "https://api.open-meteo.com/v1/forecast?latitude={env.WEATHER_LAT}&longitude={env.WEATHER_LON}&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_sum&forecast_days={arg.days|3}&wind_speed_unit=kmh"
+    headers:
+      Accept: "application/json"
+    args:
+      days:
+        type: number
+        description: "Number of forecast days (1–7, default 3)"

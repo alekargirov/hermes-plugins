@@ -1,0 +1,34 @@
+name: recipes
+version: "1.0.0"
+description: Recipes (recipe-srv v2) — list, get, search, ingredients, steps, tags.
+provides_tools:
+  - recipes_list
+  - recipes_get
+  - recipes_search
+  - recipes_by_ingredients
+  - recipes_unparsed
+  - recipes_raw
+  - recipes_tags
+  - recipes_scale
+  - recipes_create
+  - recipes_field_set
+  - recipes_delete
+  - recipes_restore
+  - recipes_upload_image
+  - recipes_ingredient_add
+  - recipes_ingredient_set
+  - recipes_ingredient_delete
+  - recipes_ingredients_set_group
+  - recipes_step_add
+  - recipes_step_set
+  - recipes_step_delete
+  - recipes_steps_reorder
+  - recipes_tag_add
+  - recipes_tag_remove
+  - recipes_tag_rename
+  - recipes_tag_merge
+  - recipes_tag_set_cuisine
+requires_env:
+  - RECIPES_URL
+  - USER_ID
+

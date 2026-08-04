@@ -1,0 +1,16 @@
+name: radarr
+version: "1.0.0"
+description: Radarr — movie library, search, add, delete, queue, profiles.
+provides_tools:
+  - radarr_library
+  - radarr_search
+  - radarr_add
+  - radarr_delete
+  - radarr_queue
+  - radarr_wanted
+  - radarr_rootfolder
+  - radarr_qualityprofile
+requires_env:
+  - RADARR_API_KEY
+  - RADARR_URL
+

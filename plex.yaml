@@ -1,0 +1,41 @@
+tools:
+  - name: plex_now_playing
+    description: Get currently active Plex playback sessions.
+    group: arr
+    method: GET
+    url: "{env.PLEX_URL}/status/sessions"
+    headers:
+      X-Plex-Token: "{env.PLEX_TOKEN}"
+      Accept: "application/json"
+
+  - name: plex_on_deck
+    description: Get Plex on-deck (continue watching) items.
+    group: arr
+    method: GET
+    url: "{env.PLEX_URL}/library/onDeck"
+    headers:
+      X-Plex-Token: "{env.PLEX_TOKEN}"
+      Accept: "application/json"
+
+  - name: plex_recently_added
+    description: Get recently added content in Plex.
+    group: arr
+    method: GET
+    url: "{env.PLEX_URL}/library/recentlyAdded"
+    headers:
+      X-Plex-Token: "{env.PLEX_TOKEN}"
+      Accept: "application/json"
+
+  - name: plex_search
+    description: Search the Plex library.
+    group: arr
+    method: GET
+    url: "{env.PLEX_URL}/search?query={arg.query}"
+    headers:
+      X-Plex-Token: "{env.PLEX_TOKEN}"
+      Accept: "application/json"
+    args:
+      query:
+        type: string
+        description: Search query
+        required: true

@@ -1,0 +1,8 @@
+name: notes
+version: 0.1.0
+description: >-
+  Notes vault (notes-srv) tools for a Hermes agent, under the `notes` toolset.
+  Calls notes-srv's existing /api/v2 REST surface directly — notes-srv has no
+  users, and its X-API-Key IS the writable top-level folder, so there is no
+  separate identity to carry and no /api/agent/tools endpoint to forward to.
+author: alek

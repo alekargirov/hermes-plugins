@@ -1,0 +1,8 @@
+name: radarr
+version: 0.1.0
+description: >-
+  Radarr — movie library, search, add, delete, queue, wanted, root folders and
+  quality profiles, under the `radarr` toolset. A direct plugin: Radarr is
+  third-party software on the LAN, so this owns the HTTP call and authenticates
+  with Radarr's own X-Api-Key. Single-tenant; there is no user to scope to.
+author: alek

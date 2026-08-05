@@ -123,6 +123,7 @@ def test_unreachable_names_the_url_and_the_env_var(monkeypatch):
 
     monkeypatch.setattr(radarr.urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setenv("RADARR_URL", "http://radarr")
+    monkeypatch.setenv("RADARR_API_KEY", "k")  # else the key guard refuses first
     out = json.loads(_handler_for(_registered(), "radarr_library")({}))
     assert out["ok"] is False
     assert "http://radarr/api/v3/movie" in out["message"]

@@ -262,12 +262,22 @@ TOOLS = [
 ]
 
 
+def _fn_schema(name: str, description: str, params: dict) -> dict:
+    """hermes registers `schema` VERBATIM as the OpenAI `function` object, so
+    name and description must live INSIDE it and the argument schema must sit
+    under `parameters`. Registering a bare {"type":"object","properties":...}
+    leaves `function.parameters` absent; the schema sanitizer then substitutes
+    an empty {"type":"object","properties":{}} and the model sees a tool with
+    no arguments and no description. See _template/tool_schema.py."""
+    return {"name": name, "description": description, "parameters": params}
+
+
 def register(ctx) -> None:
     for tool in TOOLS:
         ctx.register_tool(
             name=tool.name,
             toolset="tmdb",
-            schema=tool.schema,
+            schema=_fn_schema(tool.name, tool.description, tool.schema),
             handler=_make_handler(tool),
             description=tool.description,
         )

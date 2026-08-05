@@ -112,8 +112,17 @@ def _call(tool: Tool, args: dict) -> str:
         return json.dumps(
             {"ok": False, "message": "LIDARR_URL is not set for this profile"}
         )
+    key = _env("LIDARR_API_KEY")
+    if not key:
+        # Without this the request goes out with an empty X-Api-Key and the
+        # service answers a bare 401, which the agent reports as a broken
+        # backend rather than one missing line in the profile .env. Name the
+        # variable, never the value.
+        return json.dumps(
+            {"ok": False, "message": "LIDARR_API_KEY is not set for this profile"}
+        )
     url = _render(tool.url, args, quote=True)
-    headers = {"X-Api-Key": _env("LIDARR_API_KEY"), "Accept": "application/json"}
+    headers = {"X-Api-Key": key, "Accept": "application/json"}
 
     data = None
     if tool.body is not None:
@@ -287,12 +296,22 @@ TOOLS = [
 ]
 
 
+def _fn_schema(name: str, description: str, params: dict) -> dict:
+    """hermes registers `schema` VERBATIM as the OpenAI `function` object, so
+    name and description must live INSIDE it and the argument schema must sit
+    under `parameters`. Registering a bare {"type":"object","properties":...}
+    leaves `function.parameters` absent; the schema sanitizer then substitutes
+    an empty {"type":"object","properties":{}} and the model sees a tool with
+    no arguments and no description. See _template/tool_schema.py."""
+    return {"name": name, "description": description, "parameters": params}
+
+
 def register(ctx) -> None:
     for tool in TOOLS:
         ctx.register_tool(
             name=tool.name,
             toolset="lidarr",
-            schema=tool.schema,
+            schema=_fn_schema(tool.name, tool.description, tool.schema),
             handler=_make_handler(tool),
             description=tool.description,
         )

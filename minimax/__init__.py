@@ -184,7 +184,12 @@ def _schema(props, required=()):
 
 TOOLS = [
     Tool(
-        "web_search",
+        # NOT `web_search`, which is what the MCP gate called it. Inside hermes
+        # that name is already taken by the built-in `web` toolset, and the
+        # registry REFUSES the second registration — so whichever loaded second
+        # was silently dropped, and which one that was depended on import
+        # order. Renaming leaves both reachable.
+        "minimax_web_search",
         "Search the web using MiniMax's real-time search. Returns organic results with titles, URLs, snippets, and dates. Use for current events, facts, prices, or anything that needs live information.",
         _schema(
             {
@@ -199,7 +204,7 @@ TOOLS = [
         limit=None,
     ),
     Tool(
-        "understand_image",
+        "minimax_understand_image",
         "Analyse an image from a URL using MiniMax M3 vision. Describe, extract text, identify objects, or answer questions about image content. The reply may start with a <think>…</think> reasoning block — ignore it and use the text after it. JPEG/PNG/GIF/WebP up to 20MB; the URL must be publicly fetchable (hosts that block hotlinking, e.g. Wikimedia, fail with \"remote returned status 403\").",
         _schema(
             {
@@ -215,7 +220,7 @@ TOOLS = [
         limit=None,
     ),
     Tool(
-        "generate_image",
+        "minimax_generate_image",
         "Generate an image from a text prompt using MiniMax image-01. Returns a temporary download URL (expires after ~24h — fetch/save it promptly). Describe subject, style, lighting, and composition in the prompt for best results.",
         _schema(
             {
@@ -231,7 +236,7 @@ TOOLS = [
         limit=None,
     ),
     Tool(
-        "generate_music",
+        "minimax_generate_music",
         "Generate a song (vocals + instruments) from a style prompt and lyrics using MiniMax music-2.6. Returns a temporary MP3 URL (expires after ~24h — fetch/save it promptly). Songs run roughly 1–3 minutes.",
         _schema(
             {
@@ -249,12 +254,22 @@ TOOLS = [
 ]
 
 
+def _fn_schema(name: str, description: str, params: dict) -> dict:
+    """hermes registers `schema` VERBATIM as the OpenAI `function` object, so
+    name and description must live INSIDE it and the argument schema must sit
+    under `parameters`. Registering a bare {"type":"object","properties":...}
+    leaves `function.parameters` absent; the schema sanitizer then substitutes
+    an empty {"type":"object","properties":{}} and the model sees a tool with
+    no arguments and no description. See _template/tool_schema.py."""
+    return {"name": name, "description": description, "parameters": params}
+
+
 def register(ctx) -> None:
     for tool in TOOLS:
         ctx.register_tool(
             name=tool.name,
             toolset="minimax",
-            schema=tool.schema,
+            schema=_fn_schema(tool.name, tool.description, tool.schema),
             handler=_make_handler(tool),
             description=tool.description,
         )

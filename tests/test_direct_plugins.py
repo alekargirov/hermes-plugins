@@ -67,9 +67,15 @@ def test_each_plugin_uses_its_own_toolset(mod):
 def test_every_tool_has_a_description_and_an_object_schema(mod):
     for t in _reg(mod).registered:
         assert t["description"].strip(), f"{t['name']} has no description"
-        assert t["schema"]["type"] == "object"
-        for req in t["schema"]["required"]:
-            assert req in t["schema"]["properties"], f"{t['name']}: {req} not declared"
+        # `schema` IS the function object; the arguments live under
+        # `parameters`. This test asserted the bare shape until 2026-08-05, so
+        # it passed all the way through the defect it was meant to catch.
+        # tests/test_schema_shape.py now proves the shape against hermes' own
+        # pipeline rather than a hand-written expectation.
+        params = t["schema"]["parameters"]
+        assert params["type"] == "object"
+        for req in params["required"]:
+            assert req in params["properties"], f"{t['name']}: {req} not declared"
 
 
 @pytest.mark.parametrize("mod", DIRECT, ids=NAMES)
@@ -140,6 +146,44 @@ def test_missing_config_refuses_without_firing_a_request(monkeypatch, mod):
 
     out = json.loads(mod._call(mod.TOOLS[0], {}))
     assert out["ok"] is False
+    assert called["n"] == 0
+
+
+# Plugins whose credential is a header the service checks: URL set, key absent.
+# nzb's credentials are in the URL path and tmdb's/minimax's only config IS the
+# key, so their missing-config case above already covers this.
+KEYED = {
+    "radarr": "RADARR_API_KEY",
+    "sonarr": "SONARR_API_KEY",
+    "lidarr": "LIDARR_API_KEY",
+    "plex": "PLEX_TOKEN",
+    "tickets": "TICKETS_API_KEY",
+    "cal": "CAL_API_KEY",
+}
+
+
+@pytest.mark.parametrize("mod", [m for m in DIRECT if m.__name__ in KEYED],
+                         ids=[n for n in NAMES if n in KEYED])
+def test_a_missing_key_is_named_not_left_as_a_bare_401(monkeypatch, mod):
+    """URL set, key missing. Without a guard the request goes out with an empty
+    auth header, the service answers 401, and the agent reports the backend as
+    broken — alek lost a testing session to exactly that on tickets. The
+    refusal must name the variable, and must not fire a request."""
+    called = {"n": 0}
+
+    def count(req, timeout=None):
+        called["n"] += 1
+        return _Resp(b"[]")
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", count)
+    for k, v in SECRETS[mod.__name__].items():
+        monkeypatch.setenv(k, v)
+    var = KEYED[mod.__name__]
+    monkeypatch.delenv(var, raising=False)
+
+    out = json.loads(mod._call(mod.TOOLS[0], {}))
+    assert out["ok"] is False
+    assert var in out["message"], f"{mod.__name__}: refusal does not name {var}"
     assert called["n"] == 0
 
 

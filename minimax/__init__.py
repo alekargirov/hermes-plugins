@@ -45,6 +45,12 @@ class Tool(NamedTuple):
     body: Optional[str] = None
     select: Optional[list] = None
     limit: Optional[int] = None
+    # Seconds to wait for a response. 60 suits search, vision and images, all
+    # of which answer in a few seconds. Music generation does NOT: MiniMax
+    # composes the whole track before replying, and a full set of lyrics blew
+    # straight through 60s while three short lines squeaked under it — so the
+    # tool looked like it worked until someone wrote a real song.
+    timeout: int = 60
 
 
 def _env(name: str, default: str = "") -> str:
@@ -117,6 +123,15 @@ def _shape(text: str, select, limit) -> str:
     return json.dumps(items)
 
 
+def _is_timeout(e: Exception) -> bool:
+    """urllib surfaces a read timeout as a bare TimeoutError, and a connect
+    timeout wrapped in URLError.reason. Both mean 'we gave up waiting', and
+    neither means the credential is wrong."""
+    if isinstance(e, TimeoutError):
+        return True
+    return isinstance(getattr(e, "reason", None), TimeoutError)
+
+
 def _call(tool: Tool, args: dict) -> str:
     if not _env("MINIMAX_API_KEY"):
         return json.dumps(
@@ -135,15 +150,28 @@ def _call(tool: Tool, args: dict) -> str:
 
     req = urllib.request.Request(url, data=data, headers=headers, method=tool.method)
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
+        with urllib.request.urlopen(req, timeout=tool.timeout) as resp:
             return _shape(resp.read().decode(), tool.select, tool.limit)
     except urllib.error.HTTPError as e:
         return json.dumps(
             {"ok": False, "message": f"minimax HTTP {e.code}: {e.read().decode()[:300]}"}
         )
     except Exception as e:  # noqa: BLE001 — surface it, never crash the turn
+        # A timeout is NOT an auth problem, and this used to say "check
+        # MINIMAX_API_KEY" for every failure — so a music generation that ran
+        # long told the operator to go and rotate a perfectly good key. Say
+        # which of the two actually happened.
+        if _is_timeout(e):
+            return json.dumps(
+                {
+                    "ok": False,
+                    "message": f"minimax timed out after {tool.timeout}s — the request may "
+                               f"still be generating on their side. This is not an auth "
+                               f"problem; the key was accepted.",
+                }
+            )
         return json.dumps(
-            {"ok": False, "message": f"minimax unreachable at {url} — check MINIMAX_API_KEY: {e}"}
+            {"ok": False, "message": f"minimax unreachable at {url}: {e}"}
         )
 
 
@@ -237,7 +265,7 @@ TOOLS = [
     ),
     Tool(
         "minimax_generate_music",
-        "Generate a song (vocals + instruments) from a style prompt and lyrics using MiniMax music-2.6. Returns a temporary MP3 URL (expires after ~24h — fetch/save it promptly). Songs run roughly 1–3 minutes.",
+        "Generate a song (vocals + instruments) from a style prompt and lyrics using MiniMax music-2.6. Returns a temporary MP3 URL (expires after ~24h — fetch/save it promptly). The finished songs run roughly 1–3 minutes, and MiniMax composes the whole track before replying, so a full set of lyrics can take a couple of minutes to come back. Expect to wait.",
         _schema(
             {
                 "style": _s("Style/mood description, comma-separated works well (e.g. \"Soulful Blues, Rainy Night, Melancholy, Male Vocals, Slow Tempo\")."),
@@ -250,6 +278,7 @@ TOOLS = [
         body="{\"model\":\"music-2.6\",\"prompt\":\"{arg.style}\",\"lyrics\":\"{arg.lyrics}\",\"audio_setting\":{\"sample_rate\":44100,\"bitrate\":256000,\"format\":\"mp3\"},\"output_format\":\"url\"}",
         select=None,
         limit=None,
+        timeout=300,
     ),
 ]
 

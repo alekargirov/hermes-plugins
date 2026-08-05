@@ -238,3 +238,46 @@ def test_our_user_scoped_apps_never_send_a_user_id(monkeypatch, mod):
         mod._call(tool, {"user_id": "1", "userId": "1", "tg": "1"})
         assert "x-user-id" not in seen["headers"], f"{tool.name} sent a user id"
         assert seen["headers"]["x-api-key"] == "SUPERSECRET"
+
+
+def test_music_gets_a_longer_timeout_than_the_rest_of_minimax():
+    """MiniMax composes the whole track before replying. At the shared 60s a
+    full set of lyrics timed out while three short lines got through, so the
+    tool looked fine until someone wrote a real song (#178)."""
+    by_name = {t.name: t for t in minimax.TOOLS}
+    assert by_name["minimax_generate_music"].timeout >= 180
+    for name in ("minimax_web_search", "minimax_understand_image",
+                 "minimax_generate_image"):
+        assert by_name[name].timeout == 60
+
+
+@pytest.mark.parametrize("mod", [minimax, tmdb], ids=["minimax", "tmdb"])
+def test_a_connection_failure_does_not_blame_the_api_key(monkeypatch, mod):
+    """Both used to answer every failure with "check <PLUGIN>_API_KEY". A read
+    timeout on a long music generation therefore told alek to rotate a key that
+    was working. A bad key arrives as an HTTP 401 on the other branch, where it
+    cannot be mistaken for anything else."""
+    def boom(req, timeout=None):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", boom)
+    for k, v in SECRETS[mod.__name__].items():
+        monkeypatch.setenv(k, v)
+
+    msg = json.loads(mod._call(mod.TOOLS[0], {"query": "x", "id": 1}))["message"]
+    assert "API_KEY" not in msg, f"{mod.__name__}: blames the key for a connection failure"
+
+
+def test_minimax_names_a_timeout_as_a_timeout(monkeypatch):
+    def slow(req, timeout=None):
+        raise TimeoutError("The read operation timed out")
+
+    monkeypatch.setattr(minimax.urllib.request, "urlopen", slow)
+    monkeypatch.setenv("MINIMAX_API_KEY", "SUPERSECRET")
+    music = [t for t in minimax.TOOLS if t.name == "minimax_generate_music"][0]
+
+    out = json.loads(minimax._call(music, {"style": "s", "lyrics": "l"}))
+    assert out["ok"] is False
+    assert "timed out after 300s" in out["message"]
+    assert "not an auth problem" in out["message"]
+    assert "SUPERSECRET" not in out["message"]

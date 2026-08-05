@@ -140,7 +140,12 @@ def _call(tool: Tool, args: dict) -> str:
         )
     except Exception as e:  # noqa: BLE001 — surface it, never crash the turn
         return json.dumps(
-            {"ok": False, "message": f"tmdb unreachable at {_redact(url)} — check TMDB_API_KEY: {e}"}
+            # NOT "check TMDB_API_KEY". A connection failure is not an auth
+            # failure, and naming the key sends the operator after the wrong
+            # thing — a bad key comes back as an HTTP 401 on the branch above,
+            # where it is unmistakable. minimax made this mistake too and told
+            # alek to rotate a perfectly good key over a read timeout.
+            {"ok": False, "message": f"tmdb unreachable at {_redact(url)}: {e}"}
         )
 
 

@@ -152,3 +152,17 @@ def test_minimax_json_escapes_body_arguments():
 def test_tmdb_redacts_its_key_and_nzb_redacts_its_password():
     assert "SECRET" not in tmdb._redact("https://x/3/y?api_key=SECRET&q=1")
     assert "PASS" not in nzb._redact("http://nzb:6789/user:PASS/jsonrpc")
+
+
+@pytest.mark.parametrize("mod", DIRECT, ids=NAMES)
+def test_the_startup_log_line_never_prints_a_secret(monkeypatch, capsys, mod):
+    """register() prints a line naming where the plugin points. For most
+    plugins that is a URL, but tmdb's and minimax's only config IS the key —
+    and the first version of both printed it straight into the container log,
+    where docker keeps it. Error paths were covered; this line was not."""
+    for k, v in SECRETS[mod.__name__].items():
+        monkeypatch.setenv(k, v)
+    _reg(mod)
+    assert "SUPERSECRET" not in capsys.readouterr().out, (
+        f"{mod.__name__} printed a secret at registration"
+    )

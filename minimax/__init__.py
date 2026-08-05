@@ -255,6 +255,6 @@ def register(ctx) -> None:
         )
     print(
         f"[minimax] registered {len(TOOLS)} tools (v{PLUGIN_VERSION}) -> "
-        f"{_env('MINIMAX_API_KEY') or '(MINIMAX_API_KEY unset)'}",
+        f"api.minimax.io {'(key set)' if _env('MINIMAX_API_KEY') else '(MINIMAX_API_KEY UNSET)'}",
         flush=True,
     )

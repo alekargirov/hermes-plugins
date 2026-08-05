@@ -268,6 +268,6 @@ def register(ctx) -> None:
         )
     print(
         f"[tmdb] registered {len(TOOLS)} tools (v{PLUGIN_VERSION}) -> "
-        f"{_env('TMDB_API_KEY') or '(TMDB_API_KEY unset)'}",
+        f"api.themoviedb.org {'(key set)' if _env('TMDB_API_KEY') else '(TMDB_API_KEY UNSET)'}",
         flush=True,
     )

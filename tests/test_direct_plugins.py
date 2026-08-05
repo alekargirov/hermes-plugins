@@ -9,15 +9,20 @@ import json
 
 import pytest
 
+import cal
 import lidarr
 import minimax
 import nzb
 import plex
 import radarr
 import sonarr
+import tickets
 import tmdb
 
-DIRECT = [radarr, sonarr, lidarr, plex, tmdb, nzb, minimax]
+# tickets and cal are OUR apps, not third-party, but they are built the same way
+# and the contract below is about the shape and the failure paths, which apply
+# equally. They are here so nobody adds a plugin that leaks a key.
+DIRECT = [radarr, sonarr, lidarr, plex, tmdb, nzb, minimax, tickets, cal]
 NAMES = [m.__name__ for m in DIRECT]
 
 
@@ -81,6 +86,8 @@ SECRETS = {
     "tmdb": {"TMDB_API_KEY": "SUPERSECRET"},
     "nzb": {"NZB_URL": "http://nzb:6789/", "NZB_USER": "u", "NZB_PASSWORD": "SUPERSECRET"},
     "minimax": {"MINIMAX_API_KEY": "SUPERSECRET"},
+    "tickets": {"TICKETS_URL": "http://tickets:4200", "TICKETS_API_KEY": "SUPERSECRET"},
+    "cal": {"CAL_URL": "http://cal:3020", "CAL_API_KEY": "SUPERSECRET"},
 }
 
 
@@ -166,3 +173,24 @@ def test_the_startup_log_line_never_prints_a_secret(monkeypatch, capsys, mod):
     assert "SUPERSECRET" not in capsys.readouterr().out, (
         f"{mod.__name__} printed a secret at registration"
     )
+
+
+@pytest.mark.parametrize("mod", [tickets, cal], ids=["tickets", "cal"])
+def test_our_user_scoped_apps_never_send_a_user_id(monkeypatch, mod):
+    """Identity is the KEY, pinned per profile. If a user id were sent as well,
+    a model that could influence it could act as someone else — and these two
+    apps used to accept exactly that header with no key at all."""
+    seen = {}
+
+    def fake_urlopen(req, timeout=None):
+        seen["headers"] = {k.lower(): v for k, v in req.header_items()}
+        return _Resp(b"{}")
+
+    monkeypatch.setattr(mod.urllib.request, "urlopen", fake_urlopen)
+    for k, v in SECRETS[mod.__name__].items():
+        monkeypatch.setenv(k, v)
+
+    for tool in mod.TOOLS:
+        mod._call(tool, {"user_id": "1", "userId": "1", "tg": "1"})
+        assert "x-user-id" not in seen["headers"], f"{tool.name} sent a user id"
+        assert seen["headers"]["x-api-key"] == "SUPERSECRET"

@@ -60,7 +60,9 @@ def render(template: str, args: dict, env, *, quote: bool) -> str:
     def sub(m: re.Match) -> str:
         kind, rest = m.group(1), m.group(2)
         if kind == "env":
-            return env(rest.lstrip("."))
+            # env tokens carry defaults too: {env.CAL_URL|http://cal:3020}.
+            name, _, default = rest.lstrip(".").partition("|")
+            return env(name) or default
         name, _, default = rest.lstrip(".").partition("|")
         val = args.get(name)
         if val is None or val == "":

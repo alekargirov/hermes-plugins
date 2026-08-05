@@ -110,3 +110,15 @@ def test_shape_leaves_unparseable_text_alone():
 def test_shape_keeps_missing_fields_as_null():
     body = json.dumps([{"id": 1}])
     assert json.loads(ut.shape(body, select=["id", "year"])) == [{"id": 1, "year": None}]
+
+
+def test_env_tokens_carry_defaults_too():
+    """cal's spec is {env.CAL_URL|http://cal:3020}. Splitting only on the arg
+    branch looked up a variable literally named "CAL_URL|http://cal:3020",
+    which resolved to empty and produced a relative URL that urllib rejected
+    outright."""
+    assert ut.render("{env.CAL_URL|http://cal:3020}/api/v2/agenda", {},
+                     lambda n: "", quote=True) == "http://cal:3020/api/v2/agenda"
+    assert ut.render("{env.CAL_URL|http://cal:3020}/x", {},
+                     lambda n: "http://real:1" if n == "CAL_URL" else "",
+                     quote=True) == "http://real:1/x"

@@ -1,0 +1,8 @@
+name: cal
+version: 0.1.0
+description: >-
+  Calendar, tasks and projects (cal-srv) under the `cal` toolset. Authenticates
+  with X-Api-Key, looked up in identity: the key IS the caller, and it comes
+  from the profile env so the model can neither see nor set it. Deleting a whole
+  calendar, list or project is deliberately not exposed.
+author: alek

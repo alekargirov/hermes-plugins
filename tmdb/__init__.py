@@ -73,7 +73,12 @@ def _render(template: str, args: dict, *, quote: bool) -> str:
     def sub(m: re.Match) -> str:
         kind, rest = m.group(1), m.group(2)
         if kind == "env":
-            return _env(rest.lstrip("."))
+            # env tokens carry defaults too: {env.CAL_URL|http://cal:3020}.
+            # Splitting only on the arg branch left the whole
+            # "CAL_URL|http://cal:3020" being looked up as a variable name,
+            # which resolved to empty and produced a relative URL.
+            name, _, default = rest.lstrip(".").partition("|")
+            return _env(name) or default
         name, _, default = rest.lstrip(".").partition("|")
         val = args.get(name)
         if val is None or val == "":

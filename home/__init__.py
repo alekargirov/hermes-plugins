@@ -12,9 +12,14 @@ by asking. A profile with no HOME_USER_ID gets a 401 from the app and can
 therefore act for nobody — the same fuse fin3's default profile has.
 
 Env (profile .env):
-  HOME_URL      base URL (default http://home2:3021)
-  HOME_KEY      X-Home-Key, shared with the app's HOME_API_KEY
-  HOME_USER_ID  identity id this profile acts as
+  HOME_URL        base URL (default http://home2:3021)
+  HOME_API_KEY    X-Home-Key. The SAME name the app and the MCP gate already
+                  use — home-srv-v2's own .env.secrets calls it HOME_API_KEY
+                  and so does home.yaml. This plugin briefly called it
+                  HOME_KEY, which meant an operator had to duplicate an
+                  existing secret under a second name for no reason. HOME_KEY
+                  is still read as a fallback so nobody who set it is broken.
+  HOME_USER_ID    identity id this profile acts as
 
 Deliberately four tools. Adding, deleting, resizing, moving, grouping, widgets
 and sync were tools once and were cut as noise — they fit the page better than
@@ -57,8 +62,21 @@ def _env(name: str, default: str = "") -> str:
     return val or default
 
 
+def _home_key() -> str:
+    """HOME_API_KEY is the established name — the app's own .env.secrets and
+    the MCP gate's home.yaml both use it. HOME_KEY was this plugin's private
+    invention and is read second so an operator who already set it keeps
+    working."""
+    return _env("HOME_API_KEY") or _env("HOME_KEY")
+
+
 def _call(method: str, path: str, args: dict, arg_style: str) -> str:
     base = _env("HOME_URL", DEFAULT_URL).rstrip("/")
+    key = _home_key()
+    if not key:
+        return json.dumps(
+            {"ok": False, "message": "HOME_API_KEY is not set for this profile"}
+        )
     args = dict(args or {})
 
     # Path parameters are consumed out of args so they never also travel in the
@@ -72,7 +90,7 @@ def _call(method: str, path: str, args: dict, arg_style: str) -> str:
     url = base + path
     data = None
     headers = {
-        "X-Home-Key": _env("HOME_KEY"),
+        "X-Home-Key": key,
         # From the env, never from the model. See the module docstring.
         "X-User-Id": _env("HOME_USER_ID"),
     }

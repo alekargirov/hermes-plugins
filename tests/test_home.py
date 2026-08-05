@@ -53,9 +53,43 @@ def spy(monkeypatch):
 
     monkeypatch.setattr(home.urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setenv("HOME_URL", "http://home2:3021")
-    monkeypatch.setenv("HOME_KEY", "k")
+    monkeypatch.setenv("HOME_API_KEY", "k")
     monkeypatch.setenv("HOME_USER_ID", "2")
     return seen
+
+
+def test_home_api_key_is_the_name_and_home_key_still_works(monkeypatch):
+    """HOME_API_KEY is what home-srv-v2's .env.secrets and the gate's home.yaml
+    already call it. This plugin invented HOME_KEY, which would have made an
+    operator copy an existing secret under a second name. HOME_KEY is kept as a
+    fallback rather than a break."""
+    monkeypatch.delenv("HOME_API_KEY", raising=False)
+    monkeypatch.delenv("HOME_KEY", raising=False)
+    assert home._home_key() == ""
+
+    monkeypatch.setenv("HOME_KEY", "old")
+    assert home._home_key() == "old"
+
+    monkeypatch.setenv("HOME_API_KEY", "new")
+    assert home._home_key() == "new"
+
+
+def test_a_missing_home_key_refuses_without_firing_a_request(monkeypatch):
+    called = {"n": 0}
+
+    def count(req, timeout=None):
+        called["n"] += 1
+        return _Resp(b"{}")
+
+    monkeypatch.setattr(home.urllib.request, "urlopen", count)
+    monkeypatch.setenv("HOME_URL", "http://home2:3021")
+    monkeypatch.delenv("HOME_API_KEY", raising=False)
+    monkeypatch.delenv("HOME_KEY", raising=False)
+
+    out = json.loads(_handler_for(_registered(), "home_view")({}))
+    assert out["ok"] is False
+    assert "HOME_API_KEY" in out["message"]
+    assert called["n"] == 0
 
 
 def test_all_four_tools_register_under_the_home_toolset():
@@ -128,6 +162,7 @@ def test_missing_id_is_a_readable_refusal_not_a_broken_url(monkeypatch):
         return _Resp(b"{}")
 
     monkeypatch.setattr(home.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("HOME_API_KEY", "k")  # else the key guard refuses first
     out = json.loads(_handler_for(_registered(), "home_hide")({}))
     assert out["ok"] is False
     assert "id is required" in out["message"]
@@ -140,6 +175,7 @@ def test_unreachable_names_the_url_and_the_env_var(monkeypatch):
 
     monkeypatch.setattr(home.urllib.request, "urlopen", fake_urlopen)
     monkeypatch.setenv("HOME_URL", "http://home2")  # port-less mistake
+    monkeypatch.setenv("HOME_API_KEY", "k")  # else the key guard refuses first
 
     out = json.loads(_handler_for(_registered(), "home_view")({}))
     assert out["ok"] is False

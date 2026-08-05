@@ -221,6 +221,7 @@ def test_unreachable_host_becomes_a_refusal_not_an_exception(monkeypatch):
         raise OSError("connection refused")
 
     monkeypatch.setattr(notes.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setenv("NOTES_URL", "http://notes")  # the port-less mistake
 
     ctx = FakeCtx()
     notes.register(ctx)
@@ -228,6 +229,11 @@ def test_unreachable_host_becomes_a_refusal_not_an_exception(monkeypatch):
 
     assert out["ok"] is False
     assert "unreachable" in out["message"]
+    # The URL must be IN the message. Without it, a wrong NOTES_URL reads as a
+    # broken plugin rather than a typo — which is exactly what a port-less
+    # VITA3_URL did to vita3-bridge on prod for hours.
+    assert "http://notes/api/v2/tree" in out["message"]
+    assert "NOTES_URL" in out["message"]
 
 
 def test_every_tool_name_is_unique_and_prefixed():

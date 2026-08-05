@@ -72,7 +72,15 @@ def _call(method: str, path: str, args: dict, arg_style: str) -> str:
         body = e.read().decode()[:300]
         return json.dumps({"ok": False, "message": f"notes HTTP {e.code}: {body}"})
     except Exception as e:  # noqa: BLE001 — surface it to the agent, never crash the turn
-        return json.dumps({"ok": False, "message": f"notes unreachable: {e}"})
+        # NAME THE URL. On 2026-08-04 the sibling vita3-bridge reported only
+        # "unreachable: <errno>" while its VITA3_URL had lost its port on prod
+        # (http://vita3 instead of http://vita3:3023). Every call was dying at
+        # the socket, but the model paraphrased it as "I couldn't retrieve that
+        # right now" and it read as a broken plugin for hours. The URL in the
+        # message is the difference between a mystery and a one-line fix.
+        return json.dumps(
+            {"ok": False, "message": f"notes unreachable at {url} — check NOTES_URL: {e}"}
+        )
 
 
 def _make_handler(method: str, path: str, arg_style: str):

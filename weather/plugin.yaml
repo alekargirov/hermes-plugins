@@ -1,0 +1,7 @@
+name: weather
+version: 0.1.0
+description: >-
+  Open-Meteo weather — current conditions and daily forecast for the profile's
+  configured location, under the `weather` toolset. Keyless: the whole
+  configuration is WEATHER_LAT and WEATHER_LON.
+author: alek

@@ -39,7 +39,7 @@ import urllib.request
 # the agent is restarted. vita-srv-v3 compares this against its own
 # PLUGIN_VERSION and says so, in its log and in the tool's answer. Bump BOTH
 # whenever a tool is added or removed.
-PLUGIN_VERSION = "2026-08-04.1"
+PLUGIN_VERSION = "2026-08-06.1"
 
 
 def _env(name: str) -> str:
@@ -143,7 +143,65 @@ _CONDITION_STATUSES = (
 # Rules live HERE, on the tool they constrain, not in the request envelope: at
 # fourteen instruction lines in the envelope this model stopped calling tools
 # altogether and reported their schemas as empty.
-TOOLS = [
+_LAB_TOOLS = [
+    (
+        "vita3_labs",
+        "Every number ever measured about the person: each analyte with its latest value, the one "
+        "before it, its reference range, its high/low flag and the date it was taken — plus this "
+        "month's ketosis day count and today's GKI. One call answers any question about their "
+        "bloods or vitals; do not ask for results you were already given.",
+        _schema({}),
+    ),
+    (
+        "vita3_read_report",
+        "Fetch a lab report the person points you at, by its address in their notes vault. This "
+        "WRITES NOTHING — it hands you the text so YOU can read it. Then call "
+        "vita3_add_lab_result once per result you find. Only vault addresses can be read; anything "
+        "else is refused, and then you ask them to paste the results instead.",
+        _schema(
+            {"url": _s("The note's address, exactly as they gave it to you")},
+            ["url"],
+        ),
+    ),
+    (
+        "vita3_add_lab_result",
+        "Record ONE lab result. A whole panel is many calls, one per result — that is deliberate, "
+        "so a single wrong line cannot take the rest with it. "
+        "Send the analyte name EXACTLY as the report prints it and the number ONLY: the unit "
+        "belongs to the analyte, never to you, and a value with a unit in it is refused. "
+        "If the name is refused it is not in the catalogue — do NOT substitute a similar one "
+        "(mapping \"%LUC\" onto \"LUC absolute\" would file a percentage as a cell count). "
+        "Collect the refused names and tell them at the end so they can add them on /labs. "
+        "Pass the report's own reference range when it prints one; the high/low flag is computed "
+        "here and is not an argument.",
+        _schema(
+            {
+                "analyte": _s("The name as the report prints it — \"Ferritin\", \"Iron (Fe)\", \"Глюкоза\""),
+                "value": _n("The number only, with no unit"),
+                "measuredOn": _s("The day it was taken, yyyy-mm-dd. Omit for today. Never a time"),
+                "refLow": _n("The low end of the report's own range, if it prints one"),
+                "refHigh": _n("The high end of the report's own range, if it prints one"),
+            },
+            ["analyte", "value"],
+        ),
+    ),
+    (
+        "vita3_log_reading",
+        "Log a reading taken RIGHT NOW — ketones, glucose, weight, blood pressure. One analyte per "
+        "call: for \"ketones 1.4 and glucose 4.6\", call it twice. It stamps today and REFUSES a "
+        "date; earlier days are the form on /labs. Send the number only — the unit belongs to the "
+        "analyte.",
+        _schema(
+            {
+                "analyte": _s("ketones, glucose, weight — the name as they said it"),
+                "value": _n("The number only, no unit"),
+            },
+            ["analyte", "value"],
+        ),
+    ),
+]
+
+TOOLS = _LAB_TOOLS + [
     (
         "vita3_stack",
         "The whole supplement stack in one call: every item with its id, dose, intake rule, "
@@ -350,13 +408,15 @@ TOOLS = [
         "call — for two facts, call it twice. field must be one of: heightCm (whole number 50-300, "
         "centimetres), city (the name as they say it), dob (date of birth as yyyy-mm-dd, in the past), "
         "sex (one of: male, female, unknown — \"woman\" becomes female, \"man\" becomes male; anything "
-        "else is refused). Anything outside these four is refused, naming the four.",
+        "else is refused). Its snake_case spelling is accepted too (height_cm), but nothing else is: "
+        "anything outside these four is refused, naming the four. "
+        "Leave value EMPTY to clear a fact — clearing sex sets it to unknown.",
         _schema(
             {
-                "field": _s("One of: heightCm, city, dob, sex"),
-                "value": _s("The new value: a whole cm number for heightCm, yyyy-mm-dd for dob, male/female/unknown for sex"),
+                "field": _s("One of: heightCm, city, dob, sex (height_cm also accepted)"),
+                "value": _s("The new value: a whole cm number for heightCm, yyyy-mm-dd for dob, male/female/unknown for sex. Empty clears the fact"),
             },
-            ["field", "value"],
+            ["field"],
         ),
     ),
     (
@@ -513,11 +573,27 @@ TOOLS = [
 
 def _fn_schema(name: str, description: str, params: dict) -> dict:
     """hermes registers `schema` VERBATIM as the OpenAI `function` object, so
-    name and description must live INSIDE it and the argument schema must sit
-    under `parameters`. Registering a bare {"type":"object","properties":...}
-    leaves `function.parameters` absent; the schema sanitizer then substitutes
-    an empty {"type":"object","properties":{}} and the model sees a tool with
-    no arguments and no description. See _template/tool_schema.py."""
+    the name and description must live INSIDE it and the argument schema must
+    sit under `parameters`.
+
+    WHAT THIS COST. Registering the bare {"type":"object","properties":...}
+    leaves `function.parameters` absent; sanitize_tool_schemas then fills in an
+    empty {"type":"object","properties":{}} on every outgoing request, and the
+    model receives 26 tools with NO arguments and NO descriptions. The
+    `description=` kwarg below never reaches the model at all — it is used for
+    tool_search indexing only.
+
+    So the model has been guessing argument names from tool names. Read the
+    rails in this file and in the README with that in mind: `dose: "30"` with no
+    unit, five retries fighting `intake_rule` vs `intakeRule`, an empty
+    `vita3_add_supplement {}`, "a model cannot pick from a list it has never
+    been shown" — every one of them is this bug wearing a different hat. The
+    rails are still right; they were just holding up a model flying blind.
+
+    Found 2026-08-05 by the hermes-plugins sweep, which fixed every plugin in
+    that repo. This copy lives in the vita repo and was missed. See
+    /home/repos/hermes-plugins/_template/tool_schema.py for the full autopsy.
+    """
     return {"name": name, "description": description, "parameters": params}
 
 

@@ -106,6 +106,19 @@ def _bb():
     return {"type": "boolean"}
 
 
+def _num_array(d):
+    """An ARRAY of numbers, not a comma-separated string.
+
+    recipe-srv and cal-srv both test `Array.isArray(b.ids)`. recipe-srv's
+    /ingredient/set-group and /step/reorder then fall back to an EMPTY list,
+    so a string argument returns ok:true having changed nothing at all — a
+    silent no-op the caller cannot detect. The MCP gate declared these
+    `type: array`; this port downgraded them to strings, which is what broke
+    them. Do not "simplify" this back to a string.
+    """
+    return {"type": "array", "items": {"type": "number"}, "description": d}
+
+
 def _schema(props, required=()):
     return {"type": "object", "properties": props, "required": list(required)}
 
@@ -306,7 +319,12 @@ TOOLS = [
     ),
     (
         "recipes_ingredient_set",
-        "Update one ingredient by id. Editing rawText re-derives qty/unit/name/prep; passing an explicit field (qty/unit/name/preparation/groupName/sort) sets just that. rawText is never overwritten except by an explicit rawText edit.",
+        # The gate's description (ported verbatim, and wrong there too) promised
+        # "rawText is never overwritten except by an explicit rawText edit".
+        # recipe-write.ts has always done the opposite ON PURPOSE, and says so:
+        # the UI displays rawText, so a field edit that left it stale would show
+        # the user their old line. The code is right; the sentence was wrong.
+        "Update one ingredient by id. rawText and the parsed fields are kept in sync BOTH ways: editing rawText re-derives qty/unit/name/preparation, and editing any one of those re-renders rawText from them — so a preparation edit does change rawText, by design, because the UI displays rawText. Editing only groupName or sort leaves rawText alone. The as-imported original is always safe in the recipe's raw text.",
         _schema(
             {
                 "id": _n("Ingredient id (from recipes_get / recipes_unparsed)"),
@@ -342,7 +360,7 @@ TOOLS = [
         "Assign a group name to several ingredients at once (bucket them under \"For the sauce\" etc.). Returns the updated rows.",
         _schema(
             {
-                "ids": _s("Ingredient ids"),
+                "ids": _num_array("Ingredient ids"),
                 "groupName": _s("Group name to assign (empty string clears it)"),
             },
             ["ids", "groupName"],
@@ -401,7 +419,7 @@ TOOLS = [
         _schema(
             {
                 "slug": _s("Recipe slug"),
-                "orderedIds": _s("Step ids in the desired order"),
+                "orderedIds": _num_array("Step ids in the desired order"),
             },
             ["slug", "orderedIds"],
         ),

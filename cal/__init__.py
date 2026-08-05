@@ -197,6 +197,19 @@ def _bb():
     return {"type": "boolean"}
 
 
+def _num_array(d):
+    """An ARRAY of numbers, not a comma-separated string.
+
+    recipe-srv and cal-srv both test `Array.isArray(b.ids)`. recipe-srv's
+    /ingredient/set-group and /step/reorder then fall back to an EMPTY list,
+    so a string argument returns ok:true having changed nothing at all — a
+    silent no-op the caller cannot detect. The MCP gate declared these
+    `type: array`; this port downgraded them to strings, which is what broke
+    them. Do not "simplify" this back to a string.
+    """
+    return {"type": "array", "items": {"type": "number"}, "description": d}
+
+
 def _schema(props, required=()):
     return {"type": "object", "properties": props, "required": list(required)}
 
@@ -385,7 +398,7 @@ TOOLS = [
         _schema(
             {
                 "id": _n("A single event id"),
-                "ids": _s("Several event ids (max 200). Reports which were deleted and which were already gone."),
+                "ids": _num_array("Several event ids (max 200). Reports which were deleted and which were already gone."),
             },
         ),
         "POST",
@@ -487,7 +500,7 @@ TOOLS = [
         _schema(
             {
                 "id": _n("A single task id"),
-                "ids": _s("Several task ids (max 200). Reports which were deleted and which were already gone."),
+                "ids": _num_array("Several task ids (max 200). Reports which were deleted and which were already gone."),
             },
         ),
         "POST",

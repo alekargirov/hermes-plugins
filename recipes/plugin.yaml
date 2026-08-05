@@ -1,0 +1,8 @@
+name: recipes
+version: 0.1.0
+description: >-
+  Recipe library (recipe-srv) tools for a Hermes agent, under the `recipes`
+  toolset. Calls recipe-srv's existing /api/v2 REST surface directly —
+  recipe-srv is a single-user LAN app with no auth, so there is no identity to
+  carry and no /api/agent/tools endpoint to forward to.
+author: alek

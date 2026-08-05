@@ -314,7 +314,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_close",
-        "Close an open ticket (admin only). Records optional note in the timeline.",
+        "Close an open ticket. The admin, the reporter, and the current assignee may close — so you can retract a ticket you filed by mistake, and you can close work that was assigned to you once it is done. Records an optional note in the timeline.",
         _schema(
             {
                 "id": _bn(),
@@ -330,7 +330,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_reopen",
-        "Reopen a closed ticket (admin only).",
+        "Reopen a closed ticket. The admin, the reporter, and the current assignee may reopen. Records an optional note in the timeline.",
         _schema(
             {
                 "id": _bn(),

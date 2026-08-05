@@ -215,10 +215,18 @@ TOOLS = [
     ),
     Tool(
         "tickets_mine",
-        "List tickets currently assigned to you (the calling agent). Use this to pick up work the admin has routed your way. Returns only open tickets where the latest assign event names your user id.",
-        _schema({}),
+        "List open tickets that belong to you (the calling agent) — by default both the ones you filed and the ones assigned to you. scope='reported' returns only tickets YOU filed, which is how you follow up on your own bug reports. scope='assigned' returns only work an admin has routed your way (the latest assign event names your user id). scope='all' is the default and returns both. Filing a ticket does NOT assign it to you.",
+        _schema(
+            {
+                "scope": _s("One of: all (default), reported, assigned"),
+            },
+        ),
         "GET",
-        "{env.TICKETS_URL}/api/tickets/mine",
+        # The API defaults to `assigned`, which is what /mine has always meant
+        # and what the gate still relies on. The PLUGIN defaults to `all`: an
+        # agent asking "what are my tickets" almost always means the ones it
+        # filed, and a bot that filed ten of them was told it owned none.
+        "{env.TICKETS_URL}/api/tickets/mine?scope={arg.scope|all}",
         body=None,
         select=None,
         limit=None,

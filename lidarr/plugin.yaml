@@ -1,0 +1,8 @@
+name: lidarr
+version: 0.1.0
+description: >-
+  Lidarr — artist library, search, add, delete, queue, wanted, root folders and
+  quality/metadata profiles, under the `lidarr` toolset. A direct plugin against
+  third-party software on the LAN, authenticating with Lidarr's own X-Api-Key.
+  Single-tenant.
+author: alek

@@ -1,0 +1,7 @@
+name: plex
+version: 0.1.0
+description: >-
+  Plex Media Server — current sessions, on-deck, recently added and library
+  search, under the `plex` toolset. A direct plugin against third-party software
+  on the LAN, authenticating with X-Plex-Token and asking for JSON explicitly.
+author: alek

@@ -1,0 +1,8 @@
+name: minimax
+version: 0.1.0
+description: >-
+  MiniMax — web search, image understanding, image generation and music
+  generation, under the `minimax` toolset. A direct plugin against a paid API;
+  body arguments are JSON-escaped so a quote in a prompt cannot produce an
+  invalid request.
+author: alek

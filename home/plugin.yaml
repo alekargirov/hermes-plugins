@@ -1,9 +1,0 @@
-name: home
-version: 0.1.0
-description: >-
-  Homepage (home-srv-v2) tools for a Hermes agent, under the `home` toolset.
-  Calls the app's existing /api/v2 REST surface directly with X-Home-Key AND
-  X-User-Id — the key proves the caller is a trusted tool caller, the user id
-  says whom it acts for, and that id comes from the profile's env so the model
-  can neither see nor set it.
-author: alek

@@ -1,0 +1,10 @@
+name: scout
+version: 0.1.0
+description: >-
+  Scout research-store (scout-srv) tools for a Hermes agent, under the
+  `scout` toolset. Calls scout-srv's existing /api/v1 REST surface directly —
+  the same routes its own in-process MCP surface dispatches to — so there is
+  only one implementation of each rule (scope enforcement, verified-requires-
+  coordinates, researched-requires-sourceUrl) and no second place for it to
+  drift.
+author: alek

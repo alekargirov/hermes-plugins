@@ -27,7 +27,7 @@ import urllib.request
 # changes nothing until that agent restarts. The register() log line prints
 # this so a stale copy is visible; see notes/__init__.py for the incident that
 # made this convention non-optional.
-PLUGIN_VERSION = "2026-08-08.1"
+PLUGIN_VERSION = "2026-08-09.2"   # 20 tools; descriptions byte-identical to mcp.ts
 DEFAULT_URL = "http://scout:3026"
 
 
@@ -155,9 +155,10 @@ TOOLS = [
             "optionally lat/lon. Coordinates you supply are stored UNVERIFIED and shown in red until "
             "alek confirms them by hand — say so explicitly when you report back to the user. If you "
             "do not know exactly where something is, OMIT lat/lon rather than estimating or guessing a "
-            "nearby point. Passing verified:true REQUIRES lat and lon and is refused with a 400 if you "
-            "claim it without coordinates — verification is a human action, not something you can "
-            "assert. If missionId is given, the subject is scope-checked against that mission's scope "
+            "nearby point. Passing verified:true without lat/lon is refused with a 400 — but even WITH "
+            "coordinates this tool can never mark a pin verified; that is a human-only action performed "
+            "by dragging the pin or pasting a Google Maps link in the app, never by an agent call. "
+            "If missionId is given, the subject is scope-checked against that mission's scope "
             "criteria (and its ancestors'); a subject outside scope is refused with a 422 and logged to "
             "the rejection log instead of being written."
         ),
@@ -370,9 +371,258 @@ TOOLS = [
         "method": "GET",
         "path": "/rejected",
     },
+    {
+        "name": "scout_mission_update",
+        "description": (
+            "Edit a mission's name, brief, and/or status (one of active, paused, done, archived) via "
+            "PATCH — give at least one of the three, only the fields you give are changed. parentId "
+            "cannot be changed here: re-parenting changes what every descendant inherits through the "
+            "ancestor criteria chain, which is a bigger operation than an edit — create a new mission "
+            "under the correct parent instead. Setting status to 'archived' here has the same effect as "
+            "scout_mission_archive (the mission stops appearing in scout_mission_list), but prefer "
+            "scout_mission_archive for that — it says what you mean and its description explains the "
+            "effect. Refused with 404 if the mission id does not exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "mission id"},
+                "name": {"type": "string"},
+                "brief": {"type": "string", "description": "send an empty string to blank it out"},
+                "status": {"type": "string", "enum": ["active", "paused", "done", "archived"]},
+            },
+            "required": ["id"],
+        },
+        "method": "PATCH",
+        "path": "/missions/:id",
+    },
+    {
+        "name": "scout_mission_archive",
+        "description": (
+            "ARCHIVES a mission — it does NOT destroy it. Nothing is deleted: the mission's children, "
+            "its criteria, every subject linked to it, and the rejection log all stay exactly as they "
+            "were. The only effect is that the mission stops appearing in scout_mission_list (which never "
+            "shows archived missions, by construction — no argument to that tool can surface one) and in "
+            "the workbench's active views. Archiving does not cascade: a sub-mission stays active even if "
+            "its parent is archived. This is fully REVERSIBLE — call scout_mission_unarchive with the same "
+            "id to bring it straight back to status 'active' with everything intact. Use this freely to "
+            "tidy up duplicate or abandoned missions; nothing is lost. Refused with 404 if the mission id "
+            "does not exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "mission id to archive"},
+            },
+            "required": ["id"],
+        },
+        "method": "DELETE",
+        "path": "/missions/:id",
+    },
+    {
+        "name": "scout_mission_unarchive",
+        "description": (
+            "Restore a mission previously archived by scout_mission_archive. It comes back with status "
+            "'active' (whatever status it had before archiving is not remembered — same as subjects) and "
+            "reappears in scout_mission_list immediately. Refused with 404 if the mission id does not exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "mission id to unarchive"},
+            },
+            "required": ["id"],
+        },
+        "method": "POST",
+        "path": "/missions/:id/unarchive",
+    },
+    {
+        "name": "scout_criteria_add",
+        "description": (
+            "Add one or more criteria to an existing mission. This ADDS to the mission's existing "
+            "criteria, it does not replace them — use scout_criterion_update or scout_criterion_delete to "
+            "change or remove one already there. Each criterion has field, op (one of <, <=, >, >=, =, "
+            "within, contains, exists), value, optional unit, kind (scope, hard, or soft) and optional "
+            "weight. scope criteria define what belongs in the mission at all — a candidate outside scope "
+            "is refused at write time, not merely scored low; hard criteria must pass to score; soft "
+            "criteria are weighted toward a score. A sub-mission (and further descendants) inherits "
+            "whatever you add here unless it overrides the same (field, kind) pair with its own. Refused "
+            "with 404 if the mission id does not exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "mission id to add criteria to"},
+                "criteria": {"type": "array", "items": CRITERION_SCHEMA, "description": "one or more criteria"},
+            },
+            "required": ["id", "criteria"],
+        },
+        "method": "POST",
+        "path": "/missions/:id/criteria",
+    },
+    {
+        "name": "scout_criterion_update",
+        "description": (
+            "Edit an existing criterion's op, value, unit, weight, and/or kind — give at least one. field "
+            "cannot be changed: renaming what a criterion judges (e.g. price_usd -> area_sqm) is a "
+            "different criterion, not an edit of this one — delete it with scout_criterion_delete and add "
+            "the new one with scout_criteria_add instead. Refused with 404 if the criterion id does not "
+            "exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "criterion id"},
+                "op": {
+                    "type": "string",
+                    "enum": ["<", "<=", ">", ">=", "=", "within", "contains", "exists"],
+                },
+                "value": {"type": "string", "description": 'comparison value, always a string (e.g. "60000")'},
+                "unit": {"type": "string"},
+                "kind": {"type": "string", "enum": ["scope", "hard", "soft"]},
+                "weight": {"type": "number", "description": "soft-criterion weight (ignored for scope/hard)"},
+            },
+            "required": ["id"],
+        },
+        "method": "PATCH",
+        "path": "/criteria/:id",
+    },
+    {
+        "name": "scout_criterion_delete",
+        "description": (
+            "Permanently delete a single criterion by id. Unlike missions and subjects, criteria have no "
+            "archive step — this is a real, non-reversible delete, not the \"archive\" pattern used "
+            "elsewhere in Scout. Refused with 404 if the criterion id does not exist. Use it to remove a "
+            "criterion you no longer want a mission (or its descendants, which inherit it) judged against."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "criterion id to delete"},
+            },
+            "required": ["id"],
+        },
+        "method": "DELETE",
+        "path": "/criteria/:id",
+    },
+    {
+        "name": "scout_subject_update",
+        "description": (
+            "Edit an existing subject's name and/or status (one of candidate, shortlisted, rejected, "
+            "archived) — give at least one. slug cannot be changed here: it is the stable key — use "
+            "scout_subject_upsert (which matches on slug) if you need to touch a subject's coordinates, "
+            "kind or tags instead. Setting status to 'archived' here has the same effect as "
+            "scout_subject_archive, but prefer scout_subject_archive for that — it says what you mean. "
+            "Refused with 404 if the subject id does not exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "subject id"},
+                "name": {"type": "string"},
+                "status": {"type": "string", "enum": ["candidate", "shortlisted", "rejected", "archived"]},
+            },
+            "required": ["id"],
+        },
+        "method": "PATCH",
+        "path": "/subjects/:id",
+    },
+    {
+        "name": "scout_subject_archive",
+        "description": (
+            "ARCHIVES a subject — it does NOT destroy it. Its facts, mission links, and scoring/rejection "
+            "history all stay exactly as they were; only the subject's status flips to 'archived'. This "
+            "is reversible: call scout_subject_update with status set back to, e.g., 'candidate' to "
+            "bring it back into active view (there is no separate scout_subject_unarchive tool — set the "
+            "status you want directly). Use this freely to tidy up duplicate or no-longer-relevant "
+            "subjects; nothing attached to them is lost. Refused with 404 if the subject id does not "
+            "exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "subject id to archive"},
+            },
+            "required": ["id"],
+        },
+        "method": "DELETE",
+        "path": "/subjects/:id",
+    },
+    {
+        "name": "scout_subject_set_location",
+        "description": (
+            "Set a subject's location — by exact {lat, lon} coordinates or by a Google Maps link the "
+            "server resolves into coordinates — and mark that pin VERIFIED (geomVerified becomes true). "
+            "THIS IS THE ONLY WAY A PIN EVER BECOMES VERIFIED IN SCOUT: nothing else, including "
+            "scout_subject_upsert even when you give it lat/lon, can do this. Verified means a HUMAN "
+            "looked at this exact spot and confirmed it — by dragging the pin on the map themselves, or by "
+            "opening a Google Maps link themselves and pasting it. Do NOT call this tool on the strength of "
+            "your own geocoding, lookup, or reasoning about where something probably is — that is exactly "
+            "the UNVERIFIED case scout_subject_upsert already covers, and calling this tool instead would "
+            "falsely record your guess as a human confirmation. Only call this when a human has explicitly "
+            "given you the coordinates or the Google Maps link and asked you to set or correct the pin — "
+            "you are relaying their correction, made at their explicit instruction, never initiating one of "
+            "your own. Give either {lat, lon} or {googleMapsUrl}, never both and never neither; refused "
+            "with 400 if you violate that, or if the URL cannot be resolved to coordinates; refused with "
+            "404 if the subject id does not exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "subject id"},
+                "lat": {"type": "number", "description": "give with lon; omit if using googleMapsUrl"},
+                "lon": {"type": "number", "description": "give with lat; omit if using googleMapsUrl"},
+                "googleMapsUrl": {
+                    "type": "string",
+                    "description": "a Google Maps link a human opened themselves; omit if using lat/lon",
+                },
+            },
+            "required": ["id"],
+        },
+        "method": "POST",
+        "path": "/subjects/:id/geometry",
+    },
+    {
+        "name": "scout_fact_list",
+        "description": (
+            "List a subject's CURRENT facts (not superseded, not retracted), newest observation first. "
+            "Use this before scout_fact_add to see what is already known and avoid a duplicate or "
+            "contradictory fact, and before scout_fact_retract to find the id of the fact you mean to "
+            "retract."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "subject id"},
+            },
+            "required": ["id"],
+        },
+        "method": "GET",
+        "path": "/subjects/:id/facts",
+    },
+    {
+        "name": "scout_fact_retract",
+        "description": (
+            "Retract a fact by id. This SUPERSEDES the fact, it does NOT erase it — because the history is "
+            "the point. A tombstone fact (kind='retracted') is inserted and the original row is marked "
+            "as superseded by it; scout_fact_list (which only shows current, non-superseded facts) stops "
+            "showing the retracted one, but the database still records that the value was once believed "
+            "and later retracted — nothing is deleted. Refused with 400 if the fact was already retracted, "
+            "404 if it does not exist."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "id": {"type": "number", "description": "fact id to retract"},
+            },
+            "required": ["id"],
+        },
+        "method": "DELETE",
+        "path": "/facts/:id",
+    },
 ]
 
-assert len(TOOLS) == 9, "scout-srv's mcp.ts declares exactly 9 tools — update this comment if that changes"
+assert len(TOOLS) == 20, "scout-srv's mcp.ts declares exactly 20 tools — update this comment if that changes"
 
 
 def _make_handler(tool: dict):

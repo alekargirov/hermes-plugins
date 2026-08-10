@@ -27,7 +27,7 @@ import urllib.request
 # changes nothing until that agent restarts. The register() log line prints
 # this so a stale copy is visible; see notes/__init__.py for the incident that
 # made this convention non-optional.
-PLUGIN_VERSION = "2026-08-09.2"   # 20 tools; descriptions byte-identical to mcp.ts
+PLUGIN_VERSION = "2026-08-10.1"   # 20 tools + X-Scout-Caller; descriptions byte-identical to mcp.ts
 DEFAULT_URL = "http://scout:3026"
 
 

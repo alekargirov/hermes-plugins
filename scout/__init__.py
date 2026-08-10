@@ -687,8 +687,12 @@ def register(ctx) -> None:
     # is forgeable, so it cannot be what authorises a write. This reports what
     # the handler itself can read from the transport, and takes NO arguments
     # on purpose — an argument would just be the model's word again.
-    def _whoami(args: dict) -> str:
-        out = {}
+    # Signature matches _make_handler's: hermes calls a handler with the
+    # model's args PLUS its own keywords (session_id, task_id, ...). Those
+    # keywords are the interesting part — they come from the runtime, not
+    # from the model — so they are reported first.
+    def _whoami(args: dict = None, **kwargs) -> str:
+        out = {"runtime_kwargs": {k: repr(v) for k, v in kwargs.items()}}
         try:
             from tools.approval import get_current_session_key
             out["approval.session_key"] = get_current_session_key(default="<default>")

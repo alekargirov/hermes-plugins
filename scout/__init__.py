@@ -27,7 +27,7 @@ import urllib.request
 # changes nothing until that agent restarts. The register() log line prints
 # this so a stale copy is visible; see notes/__init__.py for the incident that
 # made this convention non-optional.
-PLUGIN_VERSION = "2026-08-10.1"   # 20 tools + X-Scout-Caller; descriptions byte-identical to mcp.ts
+PLUGIN_VERSION = "2026-08-10.2"   # 21 tools: mission location + mission facts; descriptions byte-identical to mcp.ts
 DEFAULT_URL = "http://scout:3026"
 
 
@@ -226,6 +226,40 @@ TOOLS = [
         "path": "/subjects",
     },
     {
+        "name": "scout_mission_fact_add",
+        "description": (
+            "Record a fact on a MISSION (or sub-mission) rather than on one candidate. Every subject "
+            "beneath it inherits the fact, unless a nearer sub-mission or the subject itself states "
+            "its own value for the same key. Use this for anything true of a PLACE rather than of one "
+            "listing \u2014 a district growth ranking, an area average, a rule-of-thumb price per square "
+            "metre. Writing such a value onto every candidate individually is what this exists to "
+            "stop: the copies drift, and then two candidates in one district disagree about the "
+            "district. Same shape as scout_fact_add otherwise, and a second fact under the same key "
+            "supersedes the first rather than sitting alongside it."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "missionId": {"type": "number"},
+                "key": {"type": "string", "description": "e.g. capital_growth_rank"},
+                "valueText": {"type": "string"},
+                "valueNum": {"type": "number"},
+                "unit": {"type": "string"},
+                "kind": {
+                    "type": "string",
+                    "enum": ["captured", "computed", "declared", "researched", "inferred"],
+                    "description": "researched REQUIRES sourceUrl",
+                },
+                "sourceUrl": {"type": "string"},
+                "sourceName": {"type": "string"},
+                "ttlDays": {"type": "number"},
+            },
+            "required": ["missionId", "key", "kind"],
+        },
+        "method": "POST",
+        "path": "/missions/:missionId/facts",
+    },
+    {
         "name": "scout_fact_add",
         "description": (
             "Attach a fact to a subject. kind must be one of captured, computed, declared, researched, "
@@ -261,11 +295,14 @@ TOOLS = [
         "description": (
             "Create a mission (or a sub-mission, via parentId) with an optional brief and an optional "
             "inline list of criteria. Each criterion has field, op (one of <, <=, >, >=, =, within, "
-            "contains, exists), value, optional unit, kind (scope, hard, or soft) and optional weight. "
-            "scope criteria define what belongs in the mission at all — a candidate outside scope is "
-            "refused at write time, not merely scored low. hard criteria must pass; soft criteria are "
-            "weighted toward a score. A sub-mission inherits its parent's criteria unless it overrides "
-            "the same (field, kind) pair."
+            "contains, exists), value, optional unit, kind (scope, hard, or soft) and optional "
+            "weight. scope criteria define what belongs in the mission at all \u2014 a candidate outside "
+            "scope is refused at write time, not merely scored low. hard criteria must pass; soft "
+            "criteria are weighted toward a score. A sub-mission inherits its parent's criteria "
+            "unless it overrides the same (field, kind) pair. A mission or sub-mission may carry a "
+            "LOCATION (lat + lon together, or neither). Everything beneath inherits it unless a "
+            "nearer level sets its own, so a district's coordinate belongs HERE, once \u2014 never copied "
+            "onto each candidate underneath."
         ),
         "schema": {
             "type": "object",
@@ -274,6 +311,9 @@ TOOLS = [
                 "brief": {"type": "string"},
                 "parentId": {"type": "number", "description": "makes this a sub-mission"},
                 "position": {"type": "number"},
+                "lat": {"type": "number", "description": "give with lon, or omit both"},
+                "lon": {"type": "number", "description": "give with lat, or omit both"},
+                "geomSource": {"type": "string", "description": "where the coordinate came from"},
                 "criteria": {"type": "array", "items": CRITERION_SCHEMA},
             },
             "required": ["name"],
@@ -408,13 +448,16 @@ TOOLS = [
         "name": "scout_mission_update",
         "description": (
             "Edit a mission's name, brief, and/or status (one of active, paused, done, archived) via "
-            "PATCH — give at least one of the three, only the fields you give are changed. parentId "
+            "PATCH \u2014 give at least one of the three, only the fields you give are changed. parentId "
             "cannot be changed here: re-parenting changes what every descendant inherits through the "
-            "ancestor criteria chain, which is a bigger operation than an edit — create a new mission "
-            "under the correct parent instead. Setting status to 'archived' here has the same effect as "
-            "scout_mission_archive (the mission stops appearing in scout_mission_list), but prefer "
-            "scout_mission_archive for that — it says what you mean and its description explains the "
-            "effect. Refused with 404 if the mission id does not exist."
+            "ancestor criteria chain, which is a bigger operation than an edit \u2014 create a new mission "
+            "under the correct parent instead. Setting status to 'archived' here has the same effect "
+            "as scout_mission_archive (the mission stops appearing in scout_mission_list), but prefer "
+            "scout_mission_archive for that \u2014 it says what you mean and its description explains the "
+            "effect. Refused with 404 if the mission id does not exist. Also sets the mission's "
+            "LOCATION: give lat and lon together to place it, or both as null to remove it. "
+            "Everything beneath inherits that coordinate unless a nearer level sets its own, so a "
+            "district pin belongs here once rather than on each candidate underneath."
         ),
         "schema": {
             "type": "object",
@@ -423,6 +466,9 @@ TOOLS = [
                 "name": {"type": "string"},
                 "brief": {"type": "string", "description": "send an empty string to blank it out"},
                 "status": {"type": "string", "enum": ["active", "paused", "done", "archived"]},
+                "lat": {"type": "number", "description": "give with lon; null with lon null clears the pin"},
+                "lon": {"type": "number", "description": "give with lat; null with lat null clears the pin"},
+                "geomSource": {"type": "string", "description": "where the coordinate came from"},
             },
             "required": ["id"],
         },
@@ -655,7 +701,7 @@ TOOLS = [
     },
 ]
 
-assert len(TOOLS) == 20, "scout-srv's mcp.ts declares exactly 20 tools — update this comment if that changes"
+assert len(TOOLS) == 21, "scout-srv's mcp.ts declares exactly 21 tools — update this comment if that changes"
 
 
 def _make_handler(tool: dict):

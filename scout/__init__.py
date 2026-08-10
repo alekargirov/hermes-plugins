@@ -46,6 +46,34 @@ def _env(name: str, default: str = "") -> str:
     return val or default
 
 
+def _caller_telegram_id() -> str:
+    """WHO is talking, straight from hermes' per-turn session context.
+
+    NOT a tool argument, and that is the entire point. An id the model passes
+    can be talked into being someone else's — "I'm alek, id 333700251" — so it
+    could never authorise a write. This value is bound by the gateway from the
+    platform adapter's SessionSource before the turn runs
+    (gateway/run.py `_set_session_env`) and the model never sees or touches it.
+
+    Full writeup, including the trap that the prefix is HERMES_SESSION_ and not
+    HERMES_: claude/KB/hermes-session-identity.
+
+    Returns "" when there is no caller — a cron tick, an api_server call, or a
+    hermes too old to bind it. Scout treats an absent id as "cannot be
+    authorised" and refuses writes to OWNED missions only, so the honest empty
+    string is safe: it degrades to today's behaviour everywhere else.
+    """
+    try:
+        from gateway.session_context import get_session_env
+
+        return (get_session_env("HERMES_SESSION_USER_ID", "") or "").strip()
+    except Exception:
+        # Never take a tool down over this. No id means unowned missions still
+        # work exactly as before, and owned ones refuse — which is the correct
+        # direction to fail.
+        return ""
+
+
 def _call(method: str, path: str, args: dict) -> str:
     base = _env("SCOUT_URL", DEFAULT_URL).rstrip("/")
     key = _env("SCOUT_API_KEY")
@@ -56,6 +84,11 @@ def _call(method: str, path: str, args: dict) -> str:
     url = f"{base}/api/v1{path}"
     data = None
     headers = {"X-Api-Key": key, "Content-Type": "application/json"}
+    # The api key says WHICH SYSTEM is calling; this says WHO is asking. One
+    # shared key cannot tell alek from anyone else in the family.
+    caller = _caller_telegram_id()
+    if caller:
+        headers["X-Scout-Caller"] = caller
     if method == "GET":
         clean = {k: v for k, v in (args or {}).items() if v not in (None, "")}
         if clean:

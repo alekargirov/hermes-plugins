@@ -679,3 +679,42 @@ def register(ctx) -> None:
         f"as key {'(set)' if _env('SCOUT_API_KEY') else '(none — every call will refuse)'}",
         flush=True,
     )
+
+    # ---- TEMPORARY PROBE — REMOVE ----------------------------------------
+    # Answers ONE question: can a tool handler see who is talking WITHOUT the
+    # model telling it? The model already knows (hermes injects SessionSource
+    # into the system prompt), but anything the model types into a tool call
+    # is forgeable, so it cannot be what authorises a write. This reports what
+    # the handler itself can read from the transport, and takes NO arguments
+    # on purpose — an argument would just be the model's word again.
+    def _whoami(args: dict) -> str:
+        out = {}
+        try:
+            from tools.approval import get_current_session_key
+            out["approval.session_key"] = get_current_session_key(default="<default>")
+        except Exception as e:
+            out["approval.session_key"] = f"<unavailable: {type(e).__name__}: {e}>"
+        try:
+            from gateway.session_context import get_session_env
+            for var in ("HERMES_SESSION_KEY", "HERMES_CHAT_ID", "HERMES_USER_ID",
+                        "HERMES_PLATFORM", "HERMES_USER_NAME", "HERMES_CHAT_TYPE"):
+                out[f"session_env.{var}"] = get_session_env(var, "<unset>")
+        except Exception as e:
+            out["session_env"] = f"<unavailable: {type(e).__name__}: {e}>"
+        for var in ("HERMES_SESSION_KEY", "HERMES_CHAT_ID", "HERMES_USER_ID"):
+            out[f"os.environ.{var}"] = os.environ.get(var, "<unset>")
+        return json.dumps(out, indent=2)
+
+    ctx.register_tool(
+        name="scout_whoami_probe",
+        toolset="scout",
+        schema=_fn_schema(
+            "scout_whoami_probe",
+            "Diagnostic. Reports what the scout plugin can see about the caller "
+            "from the transport. Takes no arguments. Call it verbatim when asked.",
+            {"type": "object", "properties": {}},
+        ),
+        handler=_whoami,
+        description="diagnostic: what the transport says about the caller",
+    )
+    # ---- END TEMPORARY PROBE ---------------------------------------------

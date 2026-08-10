@@ -707,6 +707,10 @@ def register(ctx) -> None:
             out["session_env"] = f"<unavailable: {type(e).__name__}: {e}>"
         for var in ("HERMES_SESSION_KEY", "HERMES_CHAT_ID", "HERMES_USER_ID"):
             out[f"os.environ.{var}"] = os.environ.get(var, "<unset>")
+        # Printed as well as returned. What comes back through the model is
+        # prose it may summarise or tidy; this line lands in the container log
+        # verbatim, which is the only copy worth drawing a conclusion from.
+        print(f"[scout-probe] {json.dumps(out)}", flush=True)
         return json.dumps(out, indent=2)
 
     ctx.register_tool(

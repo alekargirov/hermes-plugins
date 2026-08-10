@@ -707,10 +707,18 @@ def register(ctx) -> None:
             out["session_env"] = f"<unavailable: {type(e).__name__}: {e}>"
         for var in ("HERMES_SESSION_KEY", "HERMES_CHAT_ID", "HERMES_USER_ID"):
             out[f"os.environ.{var}"] = os.environ.get(var, "<unset>")
-        # Printed as well as returned. What comes back through the model is
-        # prose it may summarise or tidy; this line lands in the container log
-        # verbatim, which is the only copy worth drawing a conclusion from.
+        # Written to a file on the mounted volume, not just printed: plugin
+        # stdout is not captured in the container log under s6 supervision, and
+        # what comes back through the model is prose it may summarise. The file
+        # is the only copy worth drawing a conclusion from — this value decides
+        # who may write to a mission, so it gets read as bytes, not as a
+        # description of bytes.
         print(f"[scout-probe] {json.dumps(out)}", flush=True)
+        try:
+            with open("/opt/data/scout-probe.log", "a") as fh:
+                fh.write(json.dumps(out) + "\n")
+        except Exception as e:
+            out["_probe_write_error"] = f"{type(e).__name__}: {e}"
         return json.dumps(out, indent=2)
 
     ctx.register_tool(

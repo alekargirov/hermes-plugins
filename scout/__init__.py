@@ -27,7 +27,7 @@ import urllib.request
 # changes nothing until that agent restarts. The register() log line prints
 # this so a stale copy is visible; see notes/__init__.py for the incident that
 # made this convention non-optional.
-PLUGIN_VERSION = "2026-08-10.2"   # 21 tools: mission location + mission facts; descriptions byte-identical to mcp.ts
+PLUGIN_VERSION = "2026-08-10.3"   # 21 tools: mission location + mission facts; descriptions byte-identical to mcp.ts
 DEFAULT_URL = "http://scout:3026"
 
 
@@ -158,6 +158,13 @@ def _mission_list_post_process(data, raw_args):
 CRITERION_SCHEMA = {
     "type": "object",
     "properties": {
+        "name": {
+            "type": "string",
+            "description": (
+                'optional human label shown instead of the raw test, e.g. "Budget ceiling" for '
+                "price_usd < 60000"
+            ),
+        },
         "field": {"type": "string", "description": "the fact key this criterion judges, e.g. price_usd"},
         "op": {
             "type": "string",
@@ -552,6 +559,7 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "id": {"type": "number", "description": "criterion id"},
+                "name": {"type": "string", "description": "human label; send an empty string to remove it"},
                 "op": {
                     "type": "string",
                     "enum": ["<", "<=", ">", ">=", "=", "within", "contains", "exists"],

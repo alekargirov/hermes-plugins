@@ -6,6 +6,8 @@ secret, not an identity: scout is single-user.
 Env (profile .env):
   SCOUT_URL      base URL (dev default http://scout:3026)
   SCOUT_API_KEY  the shared key
+  SCOUT_USER_ID  telegram id this agent acts as when NOBODY is talking (cron,
+                 api_server). A live session user always wins over it.
 
 Tool descriptions are byte-identical to src/lib/server/mcp.ts. Two languages,
 two copies: editing one means editing the other. Two tools carry the same
@@ -27,7 +29,7 @@ import urllib.request
 # changes nothing until that agent restarts. The register() log line prints
 # this so a stale copy is visible; see notes/__init__.py for the incident that
 # made this convention non-optional.
-PLUGIN_VERSION = "2026-08-10.3"   # 21 tools: mission location + mission facts; descriptions byte-identical to mcp.ts
+PLUGIN_VERSION = "2026-08-10.4"   # 21 tools: mission location + mission facts; descriptions byte-identical to mcp.ts
 DEFAULT_URL = "http://scout:3026"
 
 
@@ -58,20 +60,52 @@ def _caller_telegram_id() -> str:
     Full writeup, including the trap that the prefix is HERMES_SESSION_ and not
     HERMES_: claude/KB/hermes-session-identity.
 
-    Returns "" when there is no caller — a cron tick, an api_server call, or a
-    hermes too old to bind it. Scout treats an absent id as "cannot be
+    With no session user — a cron tick, an api_server call — it falls back to
+    SCOUT_USER_ID from the agent's .env, which says who this agent acts as when
+    nobody is talking. A live session user ALWAYS wins over it; see the comment
+    at the fallback for why that order is not negotiable.
+
+    Returns "" when there is neither. Scout treats an absent id as "cannot be
     authorised" and refuses writes to OWNED missions only, so the honest empty
     string is safe: it degrades to today's behaviour everywhere else.
     """
     try:
         from gateway.session_context import get_session_env
 
-        return (get_session_env("HERMES_SESSION_USER_ID", "") or "").strip()
+        live = (get_session_env("HERMES_SESSION_USER_ID", "") or "").strip()
+        if live:
+            return live
     except Exception:
-        # Never take a tool down over this. No id means unowned missions still
-        # work exactly as before, and owned ones refuse — which is the correct
-        # direction to fail.
-        return ""
+        # Never take a tool down over this. Fall through to the configured id,
+        # and if there is none, an empty string — unowned missions still work
+        # exactly as before and owned ones refuse, which is the right direction
+        # to fail.
+        pass
+
+    # NO SESSION USER — a cron tick, or an api_server call. There is nobody
+    # talking, so `SCOUT_USER_ID` says who this agent acts as when it acts on
+    # its own.
+    #
+    # alek's nightly khmer24 scrape hit exactly this: 30 listings scraped, 5
+    # qualified, 0 written, because every upsert was refused with "mission 87
+    # has an owner, and this request carries no caller identity". The agent was
+    # right to stop rather than invent one — that refusal is the whole rail —
+    # but a scheduled scraper is a legitimate writer that will never have a
+    # Telegram user, and it needs a way to say who it is FOR.
+    #
+    # ORDER MATTERS AND IS NOT NEGOTIABLE: a live session user always wins. If
+    # this fell back first, or overrode, then another person talking to a shared
+    # bot would have their writes attributed to whoever the env names — which is
+    # precisely the confusion mission ownership exists to prevent. The env var
+    # answers "who does this agent act as when NOBODY is talking", never "who is
+    # talking".
+    #
+    # Config, not conversation: it comes from the agent's .env, which the model
+    # cannot read or influence. `<APP>_USER_ID` is the fleet's existing name for
+    # exactly this — see claude/conventions/tech/secrets-vault, which notes it
+    # is "the one value that legitimately differs between app-alek, app-lili and
+    # app-kiki".
+    return _env("SCOUT_USER_ID", "").strip()
 
 
 def _call(method: str, path: str, args: dict) -> str:

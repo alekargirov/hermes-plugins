@@ -1,8 +1,9 @@
 name: tickets
-version: 0.1.0
+version: 0.2.0
 description: >-
   Internal ticket system (tickets-srv) — create, list, get, update, comment,
-  assign, close and reopen, under the `tickets` toolset. Authenticates with
-  X-Api-Key, looked up in identity: the key IS the caller, and it comes from the
-  profile env so the model can neither see nor set it.
+  assign, close, reopen and delete, under the `tickets` toolset. Authenticates
+  with X-Api-Key, and the key IS the caller's name: there is no identity server
+  to look it up in. It comes from the profile env so the model can neither see
+  nor set it.
 author: alek

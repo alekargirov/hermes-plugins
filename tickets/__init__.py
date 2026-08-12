@@ -1,25 +1,25 @@
 """tickets — Hermes plugin for tickets-srv.
 
-Auth is `X-Api-Key`, and the key IS the identity: it is looked up in the shared
-identity table and decides who the caller is. Username and apiKey are the same
-value by convention, so the key is simply the profile owner's username.
+Auth is `X-Api-Key`, and **the key IS the caller's name**. There is no identity
+server behind tickets-srv any more and nothing to look the key up in: send
+`scout-agent` and you are scout-agent, for as long as you keep sending it.
 
-**This plugin could not exist until 2026-08-05.** tickets-srv previously trusted
-a bare `X-User-Id` header, believed exactly as sent — safe only because the MCP
-gate was the sole caller and set it from a key it had already validated. Since
-tickets sits on tfk-net with every agent container, a plugin talking to it
-directly would have handed "act as anyone, admin included" to every agent.
-tickets-srv 96df76c added key authentication; this plugin uses it and never
-sends a user id at all.
+That makes the key an identity rather than a secret, and the ownership rules it
+unlocks — only the reporter may edit or delete what they filed — a convention
+between well-behaved agents, not a boundary. Anything on tfk-net that knows the
+string can claim the name. See tickets-srv src/auth.ts for why that trade was
+made: a name that had to be registered somewhere else went stale, and two
+thirds of the queue ended up displaying a bare user id instead of a reporter.
 
-The key comes from the profile's env. The model cannot see it and cannot set
-it, so an agent cannot act as someone else by asking.
+The key still comes from the profile's env, where the model cannot see it or
+set it, so an agent cannot act as someone else *by asking*.
 
 Env (profile .env):
   TICKETS_URL      e.g. http://tickets:4200
-  TICKETS_API_KEY  this profile owner's identity key (= their username)
+  TICKETS_API_KEY  this profile owner's name, e.g. `lili` or `scout-agent`
 
-Tool descriptions port VERBATIM from srv-mcp-yaml/tickets.yaml.
+Tool descriptions are kept BYTE-IDENTICAL to tickets-srv src/mcp.ts. Two
+languages means two copies; if you edit one, edit the other.
 """
 
 
@@ -34,7 +34,7 @@ import urllib.parse
 import urllib.request
 from typing import NamedTuple, Optional
 
-PLUGIN_VERSION = "2026-08-05.9"
+PLUGIN_VERSION = "2026-08-12.10"
 
 _NOW = re.compile(r"\{now([^}]*)\}")
 _TOKEN = re.compile(r"\{(env|arg)([^}]*)\}")
@@ -131,8 +131,8 @@ def _call(tool: Tool, args: dict) -> str:
             {
                 "ok": False,
                 "message": "TICKETS_API_KEY is not set for this profile — add it "
-                           "to the profile .env (it is the profile owner's "
-                           "identity key, same value as their username)",
+                           "to the profile .env (it is simply the profile "
+                           "owner's name, e.g. `lili` or `scout-agent`)",
             }
         )
     url = _render(tool.url, args, quote=True)
@@ -198,7 +198,7 @@ def _schema(props, required=()):
 TOOLS = [
     Tool(
         "tickets_create",
-        "File a ticket for the admin's attention. The admin gets a Telegram alert and reviews via the pica UI. Use this when you hit a bug, need a tool capability you don't have, or want a human decision before proceeding.",
+        "File a ticket for the admin's attention, under your own name — your API key IS your name, so whatever you file is attributed to you. The admin gets a Telegram alert and reviews via the tickets UI. Use this when you hit a bug, need a tool capability you don't have, or want a human decision before proceeding.",
         _schema(
             {
                 "subject": _s("Short, specific subject line"),
@@ -215,7 +215,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_mine",
-        "List open tickets that belong to you (the calling agent) — by default both the ones you filed and the ones assigned to you. scope='reported' returns only tickets YOU filed, which is how you follow up on your own bug reports. scope='assigned' returns only work an admin has routed your way (the latest assign event names your user id). scope='all' is the default and returns both. Filing a ticket does NOT assign it to you.",
+        "List open tickets that belong to you (the calling agent) — by default both the ones you filed and the ones assigned to you. scope='reported' returns only tickets YOU filed, which is how you follow up on your own bug reports. scope='assigned' returns only work an admin has routed your way (the latest assign event names you). scope='all' is the default and returns both. Filing a ticket does NOT assign it to you.",
         _schema(
             {
                 "scope": _s("One of: all (default), reported, assigned"),
@@ -233,7 +233,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_get",
-        "Read a ticket by id, including its event timeline (comments, assignments, close/reopen). Accessible to admin, the reporter, or the current assignee.",
+        "Read a ticket by id, including its event timeline (comments, assignments, close/reopen). Reads are open to any caller.",
         _schema(
             {
                 "id": _bn(),
@@ -248,7 +248,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_update",
-        "Edit an existing ticket's subject, body, or category. Admin, the reporter, and the current assignee may update. Use this when a ticket needs new findings added or its subject sharpened — preserves the event timeline instead of closing and re-filing.",
+        "Edit an existing ticket's subject, body, or category. The reporter and the current assignee may update. Use this when a ticket needs new findings added or its subject sharpened — preserves the event timeline instead of closing and re-filing.",
         _schema(
             {
                 "id": _bn(),
@@ -266,7 +266,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_comment",
-        "Add a comment to a ticket. The admin, the reporter, and the current assignee may comment. Use this to provide updates, ask questions, or record resolution notes.",
+        "Add a comment to a ticket. The reporter and the current assignee may comment. Use this to provide updates, ask questions, or record resolution notes.",
         _schema(
             {
                 "id": _bn(),
@@ -282,7 +282,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_list",
-        "List all tickets (admin only). Filter by status. Returns each ticket's latest assignee + reporter username for context.",
+        "List tickets. Filter by status. Returns each ticket's reporter and latest assignee for context. Reads are open to any caller.",
         _schema(
             {
                 "status": _s("One of: open (default), closed, all"),
@@ -296,12 +296,11 @@ TOOLS = [
     ),
     Tool(
         "tickets_assign",
-        "Assign a ticket to an agent (admin only). Pass either `agent` (username) or `assigneeId` (numeric user id). The agent will see this ticket in tickets_mine. Optional `note` is recorded in the timeline.",
+        'Assign a ticket to an agent (admin only — routing work is the admin\'s job). Pass `agent` as the agent\'s name, e.g. "claude" or "scout-agent". There is no registry, so any well-formed name is accepted. The agent will see this ticket in tickets_mine. Optional `note` is recorded in the timeline.',
         _schema(
             {
                 "id": _bn(),
-                "agent": _s("Agent username (preferred)"),
-                "assigneeId": _n("Numeric user id (alternative)"),
+                "agent": _s('Agent name, e.g. "claude" or "scout-agent"'),
                 "note": _bs(),
             },
             ["id"],
@@ -314,7 +313,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_close",
-        "Close an open ticket. The admin, the reporter, and the current assignee may close — so you can retract a ticket you filed by mistake, and you can close work that was assigned to you once it is done. Records an optional note in the timeline.",
+        "Close an open ticket. The reporter and the current assignee may close — so you can retract a ticket you filed by mistake, and you can close work that was assigned to you once it is done. Records an optional note in the timeline.",
         _schema(
             {
                 "id": _bn(),
@@ -330,7 +329,7 @@ TOOLS = [
     ),
     Tool(
         "tickets_reopen",
-        "Reopen a closed ticket. The admin, the reporter, and the current assignee may reopen. Records an optional note in the timeline.",
+        "Reopen a closed ticket. The reporter and the current assignee may reopen. Records an optional note in the timeline.",
         _schema(
             {
                 "id": _bn(),
@@ -340,6 +339,21 @@ TOOLS = [
         ),
         "POST",
         "{env.TICKETS_URL}/api/tickets/reopen",
+        body=None,
+        select=None,
+        limit=None,
+    ),
+    Tool(
+        "tickets_delete",
+        "Permanently delete a ticket you filed, along with its timeline. Only the reporter may delete, and only while nobody else has touched it: once the ticket has been assigned, or someone else has replied, it can only be closed. Use this to retract a duplicate or a test artifact — prefer tickets_close for anything real, which keeps the history.",
+        _schema(
+            {
+                "id": _bn(),
+            },
+            ["id"],
+        ),
+        "POST",
+        "{env.TICKETS_URL}/api/tickets/delete",
         body=None,
         select=None,
         limit=None,

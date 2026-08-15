@@ -1,8 +1,0 @@
-name: sonarr
-version: 0.1.0
-description: >-
-  Sonarr — series library, search, add, command, calendar, queue, wanted, root
-  folders and quality profiles, under the `sonarr` toolset. A direct plugin
-  against third-party software on the LAN, authenticating with Sonarr's own
-  X-Api-Key. Single-tenant.
-author: alek

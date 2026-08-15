@@ -10,14 +10,46 @@ import json
 import pytest
 
 import cal
-import lidarr
+import media
 import minimax
-import nzb
-import plex
-import radarr
-import sonarr
 import tickets
-import tmdb
+from media import _core as _media_core
+
+
+class _MediaService:
+    """One service inside the merged `media` plugin, wearing the surface this
+    suite walks.
+
+    radarr, sonarr, lidarr, plex, nzb and tmdb were six plugin directories
+    until 2026-08-15; now they are six Service descriptors inside one. The
+    contract below is per-SERVICE, not per-directory, so each is presented with
+    the same five attributes the standalone modules had.
+
+    The facade exists so this file stays the SINGLE contract every direct
+    plugin is held to. Forking it into a media suite and a not-media suite
+    would let the two drift, and this is the file that stops someone shipping a
+    plugin that leaks a key.
+    """
+
+    urllib = _media_core.urllib
+
+    def __init__(self, svc):
+        self._svc = svc
+        self.__name__ = svc.name
+        self.TOOLS = svc.tools
+        self._redact = svc.redact
+
+    def _call(self, tool, args):
+        return _media_core._call(self._svc, tool, args)
+
+    def register(self, ctx):
+        _media_core.register_service(ctx, self._svc)
+
+
+_MEDIA = {s.name: _MediaService(s) for s in media.SERVICES}
+radarr, sonarr, lidarr, plex, nzb, tmdb = (
+    _MEDIA[n] for n in ("radarr", "sonarr", "lidarr", "plex", "nzb", "tmdb")
+)
 
 # tickets and cal are OUR apps, not third-party, but they are built the same way
 # and the contract below is about the shape and the failure paths, which apply
@@ -58,9 +90,43 @@ def _reg(mod):
 @pytest.mark.parametrize("mod", DIRECT, ids=NAMES)
 def test_each_plugin_uses_its_own_toolset(mod):
     """Never a shared toolset: when fin3 shared `todo` the model read a
-    neighbour's schema and refused a change the tool supported."""
+    neighbour's schema and refused a change the tool supported.
+
+    For the media services this is weak — the facade takes both its name and
+    its toolset from the same Service field, so it cannot fail. The test that
+    actually holds that line after the merge is
+    test_the_merge_did_not_collapse_the_six_toolsets below.
+    """
     ctx = _reg(mod)
     assert {t["toolset"] for t in ctx.registered} == {mod.__name__}
+
+
+def test_the_merge_did_not_collapse_the_six_toolsets():
+    """One plugin, six toolsets — the whole point of how media is built.
+
+    Six directories became one on 2026-08-15 to share a core. The toolsets did
+    NOT merge with them, and must not: 42 tools under a flat `media` toolset
+    re-creates the fin3/`todo` failure above, where the model read a
+    neighbour's schema and refused a change the tool supported.
+
+    If someone "simplifies" media by passing a single toolset to
+    register_service, this is the test that catches it.
+    """
+    ctx = FakeCtx()
+    media.register(ctx)
+
+    by_toolset = {}
+    for t in ctx.registered:
+        by_toolset.setdefault(t["toolset"], []).append(t["name"])
+
+    assert set(by_toolset) == {"radarr", "sonarr", "lidarr", "plex", "nzb", "tmdb"}
+    assert len(ctx.registered) == 42, "media lost or gained a tool"
+    assert len({t["name"] for t in ctx.registered}) == 42, "a tool name collides"
+
+    # Each tool sits under the toolset its name claims. A tool answering
+    # `sonarr_queue` from the radarr toolset would route to the wrong library.
+    for toolset, names in by_toolset.items():
+        assert all(n.startswith(f"{toolset}_") for n in names), toolset
 
 
 @pytest.mark.parametrize("mod", DIRECT, ids=NAMES)

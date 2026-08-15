@@ -1,8 +1,33 @@
+"""radarr's own behaviour: the URL templates, the projection, the guards.
+
+radarr stopped being a plugin directory on 2026-08-15 and became a Service
+inside the merged `media` plugin. The assertions below are unchanged — only
+where they reach for radarr moved. `radarr` here is the service descriptor;
+the HTTP call and the urllib these tests patch now live in media/_core.py,
+shared with the other five services.
+"""
 import json
 
 import pytest
 
-import radarr
+import media
+from media import _core as _radarr_core
+from media import radarr as _radarr_mod
+
+
+class _Radarr:
+    """The five attributes these tests use, pointed at media's radarr."""
+
+    urllib = _radarr_core.urllib
+    TOOLS = _radarr_mod.TOOLS
+    SERVICE = _radarr_mod.SERVICE
+
+    @staticmethod
+    def register(ctx):
+        _radarr_core.register_service(ctx, _radarr_mod.SERVICE)
+
+
+radarr = _Radarr()
 
 
 class FakeCtx:

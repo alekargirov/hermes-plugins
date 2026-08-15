@@ -1,8 +1,0 @@
-name: nzb
-version: 0.1.0
-description: >-
-  NZBGet — status, queue, history, add, delete, pause and resume over JSON-RPC,
-  under the `nzb` toolset. Auth lives in the URL path, so the URL is redacted
-  from every error message; the RPC method is baked into each tool so the agent
-  cannot invoke arbitrary ones.
-author: alek

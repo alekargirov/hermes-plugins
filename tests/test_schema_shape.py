@@ -12,6 +12,7 @@ _template/tool_schema.py for the full account.
 """
 import importlib.util
 import pathlib
+import sys
 
 import pytest
 
@@ -35,10 +36,24 @@ class FakeCtx:
 
 def _load(d: pathlib.Path):
     """Import a plugin by path — fin3-bridge and vita3-bridge have hyphens in
-    their names and cannot be imported by name at all."""
+    their names and cannot be imported by name at all.
+
+    `submodule_search_locations` and `__path__` make the directory a PACKAGE,
+    so a plugin split across several files can import its own siblings. This
+    mirrors what hermes' real loader does (hermes_cli/plugins.py: it passes the
+    same argument and sets the same attribute). Without them this helper could
+    only ever load single-file plugins — a weaker mirror of hermes than the
+    docstring above claims, and `media`, which is a package, would fail to
+    import here for a reason hermes would never hit.
+    """
     mod_name = "_shape_" + d.name.replace("-", "_")
-    spec = importlib.util.spec_from_file_location(mod_name, d / "__init__.py")
+    spec = importlib.util.spec_from_file_location(
+        mod_name, d / "__init__.py", submodule_search_locations=[str(d)]
+    )
     mod = importlib.util.module_from_spec(spec)
+    mod.__path__ = [str(d)]
+    mod.__package__ = mod_name
+    sys.modules[mod_name] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -52,8 +67,12 @@ def _registered(d: pathlib.Path):
 
 def test_every_plugin_is_discovered():
     """A plugin dropped in without a plugin.yaml is invisible to hermes AND to
-    this test — fail loudly if the count drifts from what the repo ships."""
-    assert len(PLUGIN_DIRS) == 15, [d.name for d in PLUGIN_DIRS]
+    this test — fail loudly if the count drifts from what the repo ships.
+
+    15 -> 10 on 2026-08-15: radarr, sonarr, lidarr, plex, nzb and tmdb became
+    one `media` plugin. Six directories left, one arrived.
+    """
+    assert len(PLUGIN_DIRS) == 10, [d.name for d in PLUGIN_DIRS]
 
 
 @pytest.mark.parametrize("d", PLUGIN_DIRS, ids=lambda d: d.name)

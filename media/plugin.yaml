@@ -1,0 +1,12 @@
+name: media
+version: 0.1.0
+description: >-
+  Media management — Radarr (movies), Sonarr (series), Lidarr (music), Plex
+  (playback), NZBGet (downloads) and TMDB (lookup), each under its OWN toolset:
+  `radarr`, `sonarr`, `lidarr`, `plex`, `nzb`, `tmdb`. One plugin, six
+  toolsets — the directories were merged to share a core, the toolsets stay
+  apart so no model reads a neighbour's schema. A direct plugin: these are
+  third-party services on the LAN plus one public API, so it owns the HTTP call
+  and authenticates with each service's own credential. Single-tenant; there is
+  no user to scope to.
+author: alek

@@ -1,7 +1,0 @@
-name: tmdb
-version: 0.1.0
-description: >-
-  TMDB — movie and TV search, details, credits, popular and top-rated, under the
-  `tmdb` toolset. A direct plugin against a public API whose key travels as a
-  query parameter, so the key is redacted from every error message.
-author: alek

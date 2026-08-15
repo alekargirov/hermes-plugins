@@ -1,0 +1,11 @@
+name: app-bridge
+version: 0.1.0
+description: >-
+  Bridges to our own apps — vita3 (supplement stack, vita-srv-v3) and fin3
+  (money, fin-srv-v3) — each under its OWN toolset, `vita3` and `fin3`, never a
+  shared one. Forwards each call to the app's /api/agent/tools with the
+  profile's own <APP>_USER_ID and the dispatch session id, and holds no logic
+  beyond that: scope, vocabulary, ownership and identity are all enforced
+  server-side. Each bridge stamps its own PLUGIN_VERSION, which the app checks
+  against its own; the two versions are independent.
+author: alek

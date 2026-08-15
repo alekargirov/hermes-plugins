@@ -1,12 +1,7 @@
-"""vita3-bridge — forwards every vita3_* tool call to vita-srv-v3's tool endpoint.
+"""vita3 — the supplement stack, forwarded to vita-srv-v3.
 
-The plugin holds NO logic beyond forwarding. Identity rides in two places,
-checked against each other server-side:
-  - user_id: this profile's own VITA3_USER_ID (from the profile .env, put there
-    by the operator — the model never sees it and cannot set it);
-  - session_id: the dispatch context (the turn id vita minted), delivered to
-    the handler in code, never via the model.
-vita-srv-v3 resolves the turn and refuses any call where they disagree.
+Ported from the standalone vita3-bridge on 2026-08-15. The tool table is
+unchanged; the forward now lives in _core.py, shared with fin3.
 
 VITA3_USER_ID is OPTIONAL. One container per person sets it and gets a
 cross-check; ONE SHARED container for the whole household leaves it unset and
@@ -15,96 +10,30 @@ session id arrives in the dispatch context, never through the model. A shared
 agent must therefore run with hermes MEMORY OFF: the profile's memory store is
 per profile, not per person, and this is health data.
 
-It also refuses any tool that is not in scope for the surface the person spoke
-from: the home button cannot create or edit, a row mic can only touch its own
-row. That gate lives in the app, not here — this file offers every tool and the
-server decides. Which means a tool being LISTED is not a promise it will work
-from where you are; read the refusal, it names what is available instead.
-
-Every tool registers under toolset="vita3" — its OWN toolset, not `todo`.
-Sharing `todo` let fin3's model bleed a neighbour's schema into ours.
+The app also refuses any tool that is not in scope for the surface the person
+spoke from: the home button cannot create or edit, a row mic can only touch its
+own row. That gate lives in the app, not here — this file offers every tool and
+the server decides. A tool being LISTED is not a promise it will work from
+where you are; read the refusal, it names what is available instead.
 
 Env (profile .env): VITA3_URL (e.g. http://10.0.1.198:3023), VITA3_TOOL_KEY
 (shared with vita-srv-v3's TOOL_ENDPOINT_KEY), VITA3_USER_ID (the LOCAL
 app_user id — real profiles only).
 """
 
-import json
-import os
-import urllib.error
-import urllib.request
+from __future__ import annotations
+
+from ._core import Bridge, _b, _n, _s, _schema
 
 # The tool surface this file was built for, stamped onto every call. hermes
-# loads plugins at PROCESS START, so editing this file changes nothing until
-# the agent is restarted. vita-srv-v3 compares this against its own
-# PLUGIN_VERSION and says so, in its log and in the tool's answer. Bump BOTH
-# whenever a tool is added or removed.
+# loads plugins at PROCESS START, so copying this file to the agent host
+# changes nothing until the agent is restarted — on 2026-08-01 that gap cost
+# alek three account updates: the app had already dropped fin3_update_account
+# for fin3_set_account_balance, the running agent still offered the dead name,
+# and all the model got back was "unknown tool". The app compares this stamp
+# against its own PLUGIN_VERSION and says so, in its log and in the tool's
+# answer. Bump BOTH whenever a tool is added or removed.
 PLUGIN_VERSION = "2026-08-06.1"
-
-
-def _env(name: str) -> str:
-    """Profile-scoped credential read. The multiplexed gateway keeps each
-    profile's .env in an isolated per-turn secret scope and never mutates
-    os.environ — a bare os.environ.get returns another profile's value or
-    nothing. On a single-profile gateway (one container per user) get_secret
-    falls through to os.environ, so both modes work."""
-    try:
-        from agent.secret_scope import get_secret
-
-        val = get_secret(name, "")
-    except Exception:
-        val = os.environ.get(name, "")
-    return val or ""
-
-
-def _forward(tool: str, args: dict, session_id) -> str:
-    url = _env("VITA3_URL").rstrip("/") + "/api/agent/tools"
-    payload = {
-        "tool": tool,
-        "session_id": session_id,
-        "user_id": _env("VITA3_USER_ID"),
-        "args": args or {},
-        "plugin_version": PLUGIN_VERSION,
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "x-vita3-key": _env("VITA3_TOOL_KEY"),
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return resp.read().decode()
-    except urllib.error.HTTPError as e:
-        return json.dumps({"ok": False, "message": f"endpoint HTTP {e.code}: {e.read().decode()[:300]}"})
-    except Exception as e:  # noqa: BLE001 — surface the failure, never crash the turn
-        return json.dumps({"ok": False, "message": f"vita3-bridge unreachable: {e}"})
-
-
-def _make_handler(tool: str):
-    def _handler(args: dict, session_id: str = None, **kwargs) -> str:
-        return _forward(tool, args, session_id)
-
-    return _handler
-
-
-def _s(d):
-    return {"type": "string", "description": d}
-
-
-def _n(d):
-    return {"type": "number", "description": d}
-
-
-def _b(d):
-    return {"type": "boolean", "description": d}
-
-
-def _schema(props, required=()):
-    return {"type": "object", "properties": props, "required": list(required)}
 
 
 _ITEM_ID = {
@@ -570,45 +499,14 @@ TOOLS = _LAB_TOOLS + [
     ),
 ]
 
-
-def _fn_schema(name: str, description: str, params: dict) -> dict:
-    """hermes registers `schema` VERBATIM as the OpenAI `function` object, so
-    the name and description must live INSIDE it and the argument schema must
-    sit under `parameters`.
-
-    WHAT THIS COST. Registering the bare {"type":"object","properties":...}
-    leaves `function.parameters` absent; sanitize_tool_schemas then fills in an
-    empty {"type":"object","properties":{}} on every outgoing request, and the
-    model receives 26 tools with NO arguments and NO descriptions. The
-    `description=` kwarg below never reaches the model at all — it is used for
-    tool_search indexing only.
-
-    So the model has been guessing argument names from tool names. Read the
-    rails in this file and in the README with that in mind: `dose: "30"` with no
-    unit, five retries fighting `intake_rule` vs `intakeRule`, an empty
-    `vita3_add_supplement {}`, "a model cannot pick from a list it has never
-    been shown" — every one of them is this bug wearing a different hat. The
-    rails are still right; they were just holding up a model flying blind.
-
-    Found 2026-08-05 by the hermes-plugins sweep, which fixed every plugin in
-    that repo. This copy lives in the vita repo and was missed. See
-    /home/repos/hermes-plugins/_template/tool_schema.py for the full autopsy.
-    """
-    return {"name": name, "description": description, "parameters": params}
-
-
-def register(ctx) -> None:
-    for name, description, schema in TOOLS:
-        ctx.register_tool(
-            name=name,
-            toolset="vita3",
-            schema=_fn_schema(name, description, schema),
-            handler=_make_handler(name),
-            description=description,
-        )
-    print(
-        f"[vita3-bridge] registered {len(TOOLS)} tools -> "
-        f"{os.environ.get('VITA3_URL', '(VITA3_URL unset)')} "
-        f"as user {os.environ.get('VITA3_USER_ID') or '(shared — identity comes from each turn)'}",
-        flush=True,
-    )
+BRIDGE = Bridge(
+    name="vita3",
+    label="vita3-bridge",
+    url_env="VITA3_URL",
+    key_env="VITA3_TOOL_KEY",
+    key_header="x-vita3-key",
+    user_env="VITA3_USER_ID",
+    no_user_note="(shared — identity comes from each turn)",
+    version=PLUGIN_VERSION,
+    tools=TOOLS,
+)

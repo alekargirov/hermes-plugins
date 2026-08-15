@@ -1,117 +1,31 @@
-"""fin3-bridge — forwards every fin3_* tool call to fin-srv-v3's tool endpoint.
+"""fin3 — money, forwarded to fin-srv-v3.
 
-The plugin holds NO logic beyond forwarding. Identity rides in two places,
-checked against each other server-side:
-  - user_id: this profile's own FIN3_USER_ID (from the profile .env, put there
-    by the operator — the model never sees it and cannot set it);
-  - session_id: the dispatch context (the turn id fin3 minted), delivered to
-    the handler in code, never via the model.
-fin-srv-v3 resolves the turn and refuses any call where they disagree.
+Ported from the standalone fin3-bridge on 2026-08-15. The tool table is
+unchanged; the forward now lives in _core.py, shared with vita3.
 
-Every tool registers under toolset="fin3" — its OWN toolset, not `todo`.
-
-The original note here said a plugin-named toolset resolves to ZERO tools,
-so everything went into `todo`. That is stale for this hermes:
-hermes_cli/tools_config.py::_get_effective_configurable_toolsets() merges
-plugin-provided toolsets in, grouped by whatever key the plugin registered
-with. Sharing `todo` had a real cost — the model bled hermes' own todo tool
-schema into ours and told alek fin3_update_category "only supports target and
-content", refusing a change the tool plainly supports. Check the container log
-says "registered 30 tools" after any change here (34 means the agent is still
-running the plugin from before b4f4403); zero means the toolset key is not
-reaching platform_toolsets.
-
-Env (profile .env): FIN3_URL (e.g. http://127.0.0.1:3022), FIN3_TOOL_KEY
-(shared with fin-srv-v3's TOOL_ENDPOINT_KEY), FIN3_USER_ID (real-user
-profiles only — the default `fin3` profile deliberately has none and can
-therefore act for nobody).
+FIN3_USER_ID is optional by design: the default `fin3` profile deliberately has
+none and can therefore act for nobody.
 
 Tool descriptions port VERBATIM from srv-mcp-yaml/fin.yaml (they are the
 agent's only guidance) with fin_ -> fin3_ and tg-related text dropped.
+
+Check the container log says "registered 30 tools" after any change here
+(34 means the agent is still running the plugin from before b4f4403).
 """
 
-import json
-import os
-import urllib.error
-import urllib.request
+from __future__ import annotations
+
+from ._core import Bridge, _b, _n, _s, _schema
 
 # The tool surface this file was built for, stamped onto every call. hermes
 # loads plugins at PROCESS START, so copying this file to the agent host
 # changes nothing until the agent is restarted — on 2026-08-01 that gap cost
 # alek three account updates: the app had already dropped fin3_update_account
 # for fin3_set_account_balance, the running agent still offered the dead name,
-# and all the model got back was "unknown tool". fin-srv-v3 compares this
-# against its own PLUGIN_VERSION (src/lib/server/tool-hints.ts) and says so, in
-# its log and in the tool's answer. Bump BOTH whenever a tool is added or
-# removed. No stamp at all means a plugin older than this line.
+# and all the model got back was "unknown tool". The app compares this stamp
+# against its own PLUGIN_VERSION and says so, in its log and in the tool's
+# answer. Bump BOTH whenever a tool is added or removed.
 PLUGIN_VERSION = "2026-07-30.30"
-
-
-def _env(name: str) -> str:
-    """Profile-scoped credential read. The multiplexed gateway (hermes 0.18+)
-    keeps each profile's .env in an isolated per-turn secret scope and never
-    mutates os.environ — a bare os.environ.get returns another profile's value
-    or nothing. get_secret honours the scope; on a single-profile gateway
-    (prod: one container per user) it falls through to os.environ, so both
-    modes work. Fail-open to os.environ only when no scope API is available.
-    """
-    try:
-        from agent.secret_scope import get_secret
-
-        val = get_secret(name, "")
-    except Exception:
-        val = os.environ.get(name, "")
-    return val or ""
-
-
-def _forward(tool: str, args: dict, session_id) -> str:
-    url = _env("FIN3_URL").rstrip("/") + "/api/agent/tools"
-    payload = {
-        "tool": tool,
-        "session_id": session_id,
-        "user_id": _env("FIN3_USER_ID"),
-        "args": args or {},
-        "plugin_version": PLUGIN_VERSION,
-    }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "x-fin3-key": _env("FIN3_TOOL_KEY"),
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return resp.read().decode()
-    except urllib.error.HTTPError as e:
-        return json.dumps({"ok": False, "message": f"endpoint HTTP {e.code}: {e.read().decode()[:300]}"})
-    except Exception as e:  # noqa: BLE001 — surface the failure to the agent, never crash the turn
-        return json.dumps({"ok": False, "message": f"fin3-bridge unreachable: {e}"})
-
-
-def _make_handler(tool: str):
-    def _handler(args: dict, session_id: str = None, **kwargs) -> str:
-        return _forward(tool, args, session_id)
-
-    return _handler
-
-
-def _s(d):
-    return {"type": "string", "description": d}
-
-
-def _n(d):
-    return {"type": "number", "description": d}
-
-
-def _b(d):
-    return {"type": "boolean", "description": d}
-
-
-def _schema(props, required=()):
-    return {"type": "object", "properties": props, "required": list(required)}
 
 
 _LIMIT = {"limit": _n("Max entries (default 50, max 500)")}
@@ -456,29 +370,14 @@ TOOLS = [
     ),
 ]
 
-
-def _fn_schema(name: str, description: str, params: dict) -> dict:
-    """hermes registers `schema` VERBATIM as the OpenAI `function` object, so
-    name and description must live INSIDE it and the argument schema must sit
-    under `parameters`. Registering a bare {"type":"object","properties":...}
-    leaves `function.parameters` absent; the schema sanitizer then substitutes
-    an empty {"type":"object","properties":{}} and the model sees a tool with
-    no arguments and no description. See _template/tool_schema.py."""
-    return {"name": name, "description": description, "parameters": params}
-
-
-def register(ctx) -> None:
-    for name, description, schema in TOOLS:
-        ctx.register_tool(
-            name=name,
-            toolset="fin3",
-            schema=_fn_schema(name, description, schema),
-            handler=_make_handler(name),
-            description=description,
-        )
-    print(
-        f"[fin3-bridge] registered {len(TOOLS)} tools -> "
-        f"{os.environ.get('FIN3_URL', '(FIN3_URL unset)')} "
-        f"as user {os.environ.get('FIN3_USER_ID', '(none — impotent profile)')}",
-        flush=True,
-    )
+BRIDGE = Bridge(
+    name="fin3",
+    label="fin3-bridge",
+    url_env="FIN3_URL",
+    key_env="FIN3_TOOL_KEY",
+    key_header="x-fin3-key",
+    user_env="FIN3_USER_ID",
+    no_user_note="(none — impotent profile)",
+    version=PLUGIN_VERSION,
+    tools=TOOLS,
+)

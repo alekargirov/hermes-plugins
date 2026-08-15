@@ -35,16 +35,16 @@ class FakeCtx:
 
 
 def _load(d: pathlib.Path):
-    """Import a plugin by path — fin3-bridge and vita3-bridge have hyphens in
-    their names and cannot be imported by name at all.
+    """Import a plugin by path — app-bridge has a hyphen in its name and
+    cannot be imported by name at all.
 
     `submodule_search_locations` and `__path__` make the directory a PACKAGE,
     so a plugin split across several files can import its own siblings. This
     mirrors what hermes' real loader does (hermes_cli/plugins.py: it passes the
     same argument and sets the same attribute). Without them this helper could
     only ever load single-file plugins — a weaker mirror of hermes than the
-    docstring above claims, and `media`, which is a package, would fail to
-    import here for a reason hermes would never hit.
+    docstring above claims, and both `media` and `app-bridge`, which are
+    packages, would fail to import here for a reason hermes would never hit.
     """
     mod_name = "_shape_" + d.name.replace("-", "_")
     spec = importlib.util.spec_from_file_location(
@@ -69,10 +69,11 @@ def test_every_plugin_is_discovered():
     """A plugin dropped in without a plugin.yaml is invisible to hermes AND to
     this test — fail loudly if the count drifts from what the repo ships.
 
-    15 -> 10 on 2026-08-15: radarr, sonarr, lidarr, plex, nzb and tmdb became
-    one `media` plugin. Six directories left, one arrived.
+    15 -> 9 on 2026-08-15, in two merges: radarr, sonarr, lidarr, plex, nzb and
+    tmdb became one `media` plugin, and vita3-bridge plus fin3-bridge became
+    one `app-bridge`. Eight directories left, two arrived.
     """
-    assert len(PLUGIN_DIRS) == 10, [d.name for d in PLUGIN_DIRS]
+    assert len(PLUGIN_DIRS) == 9, [d.name for d in PLUGIN_DIRS]
 
 
 @pytest.mark.parametrize("d", PLUGIN_DIRS, ids=lambda d: d.name)

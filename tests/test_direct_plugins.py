@@ -105,7 +105,7 @@ def test_the_merge_did_not_collapse_the_six_toolsets():
     """One plugin, six toolsets — the whole point of how media is built.
 
     Six directories became one on 2026-08-15 to share a core. The toolsets did
-    NOT merge with them, and must not: 42 tools under a flat `media` toolset
+    NOT merge with them, and must not: 49 tools under a flat `media` toolset
     re-creates the fin3/`todo` failure above, where the model read a
     neighbour's schema and refused a change the tool supported.
 
@@ -120,8 +120,11 @@ def test_the_merge_did_not_collapse_the_six_toolsets():
         by_toolset.setdefault(t["toolset"], []).append(t["name"])
 
     assert set(by_toolset) == {"radarr", "sonarr", "lidarr", "plex", "nzb", "tmdb"}
-    assert len(ctx.registered) == 42, "media lost or gained a tool"
-    assert len({t["name"] for t in ctx.registered}) == 42, "a tool name collides"
+    # 42 at the merge; 49 since plex gained seven collection tools
+    # (2026-08-15). Bump it in the commit that changes the tool set — left
+    # stale it makes the suite permanently red, which is worse than no count.
+    assert len(ctx.registered) == 49, "media lost or gained a tool"
+    assert len({t["name"] for t in ctx.registered}) == 49, "a tool name collides"
 
     # Each tool sits under the toolset its name claims. A tool answering
     # `sonarr_queue` from the radarr toolset would route to the wrong library.

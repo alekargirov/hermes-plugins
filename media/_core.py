@@ -40,6 +40,16 @@ _NOW_SHIFT = re.compile(r"^([+-])(\d+)d$")
 
 
 class Tool(NamedTuple):
+    """One HTTP call the model can make.
+
+    `requires_env` names variables this ONE tool needs beyond the service's
+    url_env/key_env — plex's collection writes need PLEX_MACHINE_ID, the four
+    read tools do not. Unset, the template renders it empty and the call still
+    goes out: `uri=server:///com.plexapp...` is a well-formed request that
+    quietly creates an EMPTY collection, and nothing in the response says why.
+    Refuse by name before the request instead.
+    """
+
     name: str
     description: str
     schema: dict
@@ -48,6 +58,7 @@ class Tool(NamedTuple):
     body: Optional[str] = None
     select: Optional[list] = None
     limit: Optional[int] = None
+    requires_env: tuple = ()
 
 
 class Service(NamedTuple):
@@ -125,6 +136,9 @@ def _render(template: str, args: dict, *, quote: bool) -> str:
             val = default
         if isinstance(val, bool):
             val = "true" if val else "false"
+        # Lists join with commas — see _template/url_template.py for why.
+        if isinstance(val, (list, tuple)):
+            val = ",".join(str(v) for v in val)
         val = str(val)
         return urllib.parse.quote(val, safe="") if quote else val
 
@@ -162,6 +176,15 @@ def _call(svc: Service, tool: Tool, args: dict) -> str:
         return json.dumps(
             {"ok": False, "message": f"{svc.key_env} is not set for this profile"}
         )
+    for name in tool.requires_env:
+        if not _env(name):
+            return json.dumps(
+                {
+                    "ok": False,
+                    "message": f"{name} is not set for this profile, "
+                    f"and {tool.name} cannot work without it",
+                }
+            )
 
     url = _render(tool.url, args, quote=True)
 
@@ -182,7 +205,20 @@ def _call(svc: Service, tool: Tool, args: dict) -> str:
     req = urllib.request.Request(url, data=data, headers=headers, method=tool.method)
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
-            return _shape(resp.read().decode(), tool.select, tool.limit)
+            text = resp.read().decode()
+            if not text.strip():
+                # Plex answers a successful DELETE with 200 and NO BODY. Handed
+                # back as "" that is indistinguishable from a tool that did
+                # nothing, and the model has to guess whether the collection is
+                # gone. Say so instead.
+                return json.dumps(
+                    {
+                        "ok": True,
+                        "message": f"{tool.name} succeeded (HTTP {resp.status}, "
+                        f"empty response)",
+                    }
+                )
+            return _shape(text, tool.select, tool.limit)
     except urllib.error.HTTPError as e:
         return json.dumps(
             {

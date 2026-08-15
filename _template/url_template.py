@@ -71,6 +71,15 @@ def render(template: str, args: dict, env, *, quote: bool) -> str:
         # compare against the string "true", and Python renders True as "True".
         if isinstance(val, bool):
             val = "true" if val else "false"
+        # A list becomes a comma-separated string, which is what every
+        # multi-value parameter in these APIs expects (plex's collection uri
+        # takes `.../metadata/721,1378`). Without this, str() renders the
+        # repr — "['721', '1378']" — and the whole thing goes over the wire
+        # url-quoted, brackets and all. A model that answers a "comma-separated
+        # keys" schema with a JSON array is not making a mistake worth failing
+        # the call over.
+        if isinstance(val, (list, tuple)):
+            val = ",".join(str(v) for v in val)
         val = str(val)
         return urllib.parse.quote(val, safe="") if quote else val
 

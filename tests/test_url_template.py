@@ -122,3 +122,11 @@ def test_env_tokens_carry_defaults_too():
     assert ut.render("{env.CAL_URL|http://cal:3020}/x", {},
                      lambda n: "http://real:1" if n == "CAL_URL" else "",
                      quote=True) == "http://real:1/x"
+
+
+def test_a_list_arg_joins_with_commas_not_a_python_repr():
+    """plex's collection uri takes `.../metadata/721,1378`. str() on a list
+    renders "['721', '1378']", which then goes over the wire url-quoted,
+    brackets and quotes and all."""
+    assert r("/metadata/{arg.keys}", {"keys": ["721", 1378]}) == "/metadata/721%2C1378"
+    assert r("/metadata/{arg.keys}", {"keys": ("721",)}) == "/metadata/721"

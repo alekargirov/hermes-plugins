@@ -35,9 +35,13 @@ def _handler_for(ctx, name):
 
 
 def test_register_puts_every_tool_in_the_scout_toolset():
+    """The count is deliberate: it catches a tool silently dropping out of
+    registration. Bump it in the same commit that adds or removes a tool —
+    it sat at 9 while scout grew to 21, so the suite was red for long enough
+    that a red suite stopped meaning anything."""
     ctx = FakeCtx()
     scout.register(ctx)
-    assert len(ctx.registered) == len(scout.TOOLS) == 9
+    assert len(ctx.registered) == len(scout.TOOLS) == 21
     assert {t["toolset"] for t in ctx.registered} == {"scout"}
 
 

@@ -25,7 +25,7 @@ import urllib.request
 # START, so copying this file to an agent host changes nothing until that agent
 # is restarted — a stale copy offers tools the app has changed, or misses tools
 # entirely. The register() log line prints this so a stale copy is visible.
-PLUGIN_VERSION = "2026-08-04.9"
+PLUGIN_VERSION = "2026-08-16.10"   # notes_write now verifies by read-back
 
 DEFAULT_URL = "http://notes:3000"
 
@@ -90,6 +90,86 @@ def _make_handler(method: str, path: str, arg_style: str):
     return _handler
 
 
+def _write_verified(args: dict, session_id: str = None, **kwargs) -> str:
+    """notes_write, but the tool proves the write instead of asserting it.
+
+    WHY THIS EXISTS. On 2026-08-16 the kosh agent reported saving four finance
+    notes and a travel note. None existed. It then filed ticket #208 blaming a
+    read-only API key — a key that was correct, and writes that worked fine
+    when tested by hand. So the model was inventing both the successes and the
+    error messages it claimed to have received.
+
+    No prompt fixes that: an instruction to "verify your writes" is one more
+    thing a model can report having done. So the TOOL verifies, and the model
+    only ever sees the verdict. This is conventions rule 5 — deterministic
+    rails beat prompt discipline; tools do their own saves.
+
+    Contract: on success the response carries `"verified": true` and the
+    byte count actually read back. Anything else is a failure the model
+    cannot round off into "saved successfully".
+    """
+    raw = _call("POST", "/api/v2/notes/write", args, "body")
+
+    try:
+        written = json.loads(raw)
+    except Exception:
+        return json.dumps(
+            {"ok": False, "verified": False,
+             "message": f"notes_write: unparseable response from server: {raw[:300]}"}
+        )
+
+    # _call already converts HTTP errors into {"ok": false, ...}; pass those
+    # straight through — there is nothing to verify.
+    if isinstance(written, dict) and written.get("ok") is False:
+        written["verified"] = False
+        return json.dumps(written)
+
+    note_path = (args or {}).get("path", "")
+    sent = (args or {}).get("content", "")
+
+    check = _call("GET", "/api/v2/notes/read", {"path": note_path}, "query")
+    try:
+        got = json.loads(check)
+    except Exception:
+        return json.dumps(
+            {"ok": False, "verified": False, "path": note_path,
+             "message": "notes_write: the write returned success but reading the "
+                        f"note back failed to parse. DO NOT report this note as "
+                        f"saved. Raw: {check[:300]}"}
+        )
+
+    if isinstance(got, dict) and got.get("ok") is False:
+        return json.dumps(
+            {"ok": False, "verified": False, "path": note_path,
+             "message": "notes_write: the write returned success but the note "
+                        "could not be read back, so it did NOT persist. DO NOT "
+                        f"report it as saved. Read error: {got.get('message')}"}
+        )
+
+    stored = (got or {}).get("content")
+    if stored is None:
+        return json.dumps(
+            {"ok": False, "verified": False, "path": note_path,
+             "message": "notes_write: read-back returned no content field. "
+                        "Treat the note as NOT saved."}
+        )
+
+    # Trailing-whitespace normalisation only — the server may add or trim a
+    # final newline. Any other difference is real and must be surfaced.
+    if stored.rstrip() != sent.rstrip():
+        return json.dumps(
+            {"ok": False, "verified": False, "path": note_path,
+             "sent_bytes": len(sent), "stored_bytes": len(stored),
+             "message": "notes_write: the stored note does not match what was "
+                        "sent. The write was NOT clean — re-read the note and "
+                        "resolve before reporting anything as saved."}
+        )
+
+    written["verified"] = True
+    written["verified_bytes"] = len(stored)
+    return json.dumps(written)
+
+
 def _s(d):
     return {"type": "string", "description": d}
 
@@ -149,7 +229,11 @@ TOOLS = [
         "username is the write key; e.g. claude/...). Content is a markdown string. "
         'Path is "folder/Title" — no .md. Preserve any "^a1b2c3" block markers the '
         "note came with: they anchor existing comments, and dropping them makes the "
-        "server re-attach by matching text, or orphan the thread when it can't.",
+        "server re-attach by matching text, or orphan the thread when it can't. "
+        "THIS TOOL VERIFIES ITSELF: after writing it reads the note back and "
+        'compares it. A saved note returns "verified": true with the byte count '
+        "read back. Anything without that field failed to persist — say so, and "
+        "never describe a note as saved unless you saw it.",
         _schema(
             {
                 "path": _s('Note path under your folder (e.g. "claude/apps/notes-srv/overview")'),
@@ -214,11 +298,17 @@ def _fn_schema(name: str, description: str, params: dict) -> dict:
 
 def register(ctx) -> None:
     for name, description, schema, method, path, arg_style in TOOLS:
+        # notes_write gets the self-verifying handler; everything else is a
+        # straight pass-through. See _write_verified for why.
+        handler = (
+            _write_verified if name == "notes_write"
+            else _make_handler(method, path, arg_style)
+        )
         ctx.register_tool(
             name=name,
             toolset="notes",
             schema=_fn_schema(name, description, schema),
-            handler=_make_handler(method, path, arg_style),
+            handler=handler,
             description=description,
         )
     print(

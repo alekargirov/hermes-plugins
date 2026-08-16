@@ -1,0 +1,11 @@
+name: pica-search
+version: 0.1.0
+description: >-
+  Page reading and site mapping for the fleet, under the `pica_search` toolset.
+  Wraps our self-hosted crawl4ai (one container, headless Chromium) rather than
+  exposing its MCP server directly. The wrapper exists for its TOOL
+  DESCRIPTIONS: the plugins repo is mounted into every agent, so a description
+  here reaches the whole fleet, while SOUL.md is nine files that drift. Upstream
+  MCP descriptions cannot be edited, so guidance about which tool to reach for
+  had nowhere else to live.
+author: alek

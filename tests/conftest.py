@@ -37,3 +37,4 @@ def _install(dir_name: str, module_name: str):
 
 
 _install("app-bridge", "app_bridge")
+_install("pica-search", "pica_search")

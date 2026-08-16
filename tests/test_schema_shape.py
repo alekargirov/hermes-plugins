@@ -72,8 +72,11 @@ def test_every_plugin_is_discovered():
     15 -> 9 on 2026-08-15, in two merges: radarr, sonarr, lidarr, plex, nzb and
     tmdb became one `media` plugin, and vita3-bridge plus fin3-bridge became
     one `app-bridge`. Eight directories left, two arrived.
+
+    9 -> 10 on 2026-08-16: `pica-search` wraps crawl4ai so the fleet's page
+    reading has tool descriptions we own. See that plugin's module docstring.
     """
-    assert len(PLUGIN_DIRS) == 9, [d.name for d in PLUGIN_DIRS]
+    assert len(PLUGIN_DIRS) == 10, [d.name for d in PLUGIN_DIRS]
 
 
 @pytest.mark.parametrize("d", PLUGIN_DIRS, ids=lambda d: d.name)

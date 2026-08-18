@@ -1,0 +1,12 @@
+name: browserless
+version: 0.1.0
+description: >-
+  Browser INTERACTION for the fleet, under the `browserless` toolset. Wraps our
+  self-hosted browserless container (one shared headless Chromium) over its HTTP
+  API. Exists because crawl4ai can only fetch: it cannot log in, dismiss a
+  consent wall, fill a form, or take more than one step. Hermes' own browser_*
+  tools are deliberately NOT used — they shell out to the agent-browser CLI,
+  whose --cdp mode is broken against a self-hosted endpoint (measured
+  2026-08-18, agent-browser 0.27.0). Reading a plain URL stays
+  pica_search_read_page's job; this is for pages that need driving.
+author: alek

@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 # changes nothing until the agent restarts; btc-srv compares this stamp against
 # its own PLUGIN_VERSION and says so in the tool's own answer. Bump BOTH
 # whenever a tool is added or removed.
-PLUGIN_VERSION = "2026-08-20.1"
+PLUGIN_VERSION = "2026-08-21.1"
 
 TIMEOUT = 60
 
@@ -160,13 +160,26 @@ _TOOLS = [
     ),
     _tool(
         "btc_position",
-        "alek's actual holdings: amount, weighted-average cost, realised and "
-        "unrealised P&L against live spot. Use action 'record' to log a buy or sell "
-        "he tells you about. Cost basis is WEIGHTED-AVERAGE, not FIFO — never present "
-        "these figures as tax numbers. A sell larger than the holding is refused, "
-        "never clamped.",
+        "alek's REAL money. Holdings, weighted-average cost, realised and unrealised "
+        "P&L against live spot. Cost basis is WEIGHTED-AVERAGE, not FIFO — never "
+        "present these figures as tax numbers. A sell larger than the holding is "
+        "refused, never clamped.\n\n"
+        "action 'record' WRITES A PERMANENT LEDGER ENTRY and changes his cost basis, "
+        "which every sell recommendation is computed against. Only record a trade he "
+        "has actually told you about. NEVER record one to test that the tool works — "
+        "use 'list' or 'show' for that; they are reads.\n\n"
+        "If you do record something in error, fix it: 'list' shows every id, and "
+        "'void' with that id plus a reason retracts it. A voided row stays visible as "
+        "voided and stops counting, so the average is correct again. 'unvoid' reverses "
+        "that. Retract a mistake rather than leaving it — and say so plainly.",
         {
-            "action": _s("'show' (default) or 'record'"),
+            "action": _s(
+                "'show' (default) · 'list' every transaction with its id · "
+                "'record' a real trade (PERMANENT, changes cost basis) · "
+                "'void' a mistaken record by id, with a reason · 'unvoid' to reverse a void"
+            ),
+            "id": _n("Transaction id, for void/unvoid — get it from 'list'"),
+            "reason": _s("Why this record is being voided. Required for void; it is kept."),
             "asset": _s("BTC or ETH"),
             "side": _s("'buy' or 'sell'"),
             "amount": _n("Units of the asset, must be positive"),

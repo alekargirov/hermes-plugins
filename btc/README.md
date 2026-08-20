@@ -29,7 +29,16 @@ Get the key with:
 grep '^TOOL_ENDPOINT_KEY=' /home/apps/btc-srv/.env.secrets
 ```
 
-Single-user, so there is no `BTC_USER_ID`.
+**Single-tenant, so there is no `BTC_USER_ID`** — and that is a real difference
+from `fin3-bridge` / `vita3-bridge`, which DO require one per profile. Those
+apps hold a row per person and the id decides whose data a call touches. btc-srv
+holds exactly one ledger and one set of theses: alek's. Every profile that
+enables this plugin reads and writes that same ledger. There is no user-id
+parameter to pass, and adding one would be meaningless.
+
+The practical consequence: **any agent with this plugin can move alek's real
+position.** That is why `btc_position` warns that `record` is permanent and
+offers `void`.
 
 ## Enable
 

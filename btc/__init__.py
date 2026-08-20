@@ -128,11 +128,25 @@ _TOOLS = [
         "btc_snapshot",
         "Every live BTC/ETH market metric with its decayed WEIGHT and age in hours. "
         "Your training data is stale and spot moves by the minute — call this before "
-        "saying what anything is worth. A weight near 1 is current; a low weight means "
-        "the datum is old and must be quoted AS old. Covers price, the native ETH/BTC "
-        "ratio, funding rate, open interest, MVRV, mempool fees, Fear & Greed, and "
-        "macro (dollar index, M2, fed funds, 10y yield, inflation breakeven, Fed "
-        "balance sheet).",
+        "saying what anything is worth. Covers price, the native ETH/BTC ratio, "
+        "funding rate, open interest, MVRV, mempool fees, Fear & Greed, and macro "
+        "(dollar index, M2, fed funds, 10y yield, inflation breakeven, Fed balance "
+        "sheet).\n\n"
+        "WEIGHT IS NOT A FILTER. Never drop a metric because its weight is low — "
+        "quote it WITH its age. A low weight usually means the source publishes "
+        "slowly, not that the number is wrong: M2 sits near 0.73 because it is "
+        "released two months in arrears, and that IS the current M2. Every source's "
+        "half-life already exceeds its publication lag, so anything you get back is "
+        "the freshest that exists. Silently excluding it drops a whole family of "
+        "evidence while your answer still sounds confident.\n\n"
+        "PREFER THIS OVER crypto_price for anything analytical. Both quote spot; this "
+        "one is the number the thesis and the dashboard are built from, so using it "
+        "keeps your answer consistent with what alek sees on screen. crypto_price is "
+        "for a bare 'what is BTC at' with no surrounding argument.\n\n"
+        "NOT INCLUDED, deliberately: BTC ETF flows (the source blocks scraping — a "
+        "real gap, not an oversight), futures basis and term structure, miner flows, "
+        "exchange balances. If your reasoning needs one of those, say it is missing "
+        "rather than substituting a proxy.",
         {},
     ),
     _tool(
@@ -193,9 +207,11 @@ _TOOLS = [
         "btc_thesis",
         "The current thesis for BTC, ETH and ROTATION: stance, confidence, horizon, "
         "sell/buy levels, and every input with its live weight. Also reports whether a "
-        "resynthesis is due and WHY. Read this before offering a view — the point is "
-        "to build on the standing thesis and its evidence rather than improvise a "
-        "fresh opinion each time.",
+        "resynthesis is due and WHY, and `previouslyBelieved` — the last ten "
+        "superseded theses with what was believed and when. Read this before offering "
+        "a view. A stance that has flipped three times in a fortnight is telling you "
+        "something the current one cannot, and building on the standing thesis is the "
+        "whole point rather than improvising a fresh opinion each session.",
         {},
     ),
     _tool(
@@ -206,7 +222,13 @@ _TOOLS = [
         "describing a sell level in the narrative does not create one, and the "
         "dashboard will show that you set none. Cite evidence in `inputs`, including "
         "what UNDERMINES the thesis — one with nothing against it is displayed as a "
-        "red flag.",
+        "red flag. That is DISPLAYED, never enforced — the write succeeds either "
+        "way, so nothing stops you shipping a one-sided thesis except the judgement "
+        "not to. Confidence is likewise taken at face value and never adjusted for "
+        "you.\n\n"
+        "Unlike btc_position there is no confirmation step and none is wanted: a "
+        "thesis is meant to be rewritten often, the previous one is kept, and nothing "
+        "here touches alek's money.",
         {
             "subject": _s("BTC, ETH or ROTATION"),
             "stance": _s("Short verdict, e.g. 'mildly bullish' or 'trim into strength'"),

@@ -75,8 +75,14 @@ def test_every_plugin_is_discovered():
 
     9 -> 10 on 2026-08-16: `pica-search` wraps crawl4ai so the fleet's page
     reading has tool descriptions we own. See that plugin's module docstring.
+
+    10 -> 12 on 2026-08-20, catching up on two arrivals: `browserless` landed on
+    2026-08-18 (6a3b074) without bumping this number, so the assertion has been
+    red at HEAD since — which is the guard working, just unheeded. `crypto` is
+    the second keyless plugin after `weather`: live market data, because a model
+    answering "what's BTC at" from its training data is confidently wrong.
     """
-    assert len(PLUGIN_DIRS) == 10, [d.name for d in PLUGIN_DIRS]
+    assert len(PLUGIN_DIRS) == 12, [d.name for d in PLUGIN_DIRS]
 
 
 @pytest.mark.parametrize("d", PLUGIN_DIRS, ids=lambda d: d.name)

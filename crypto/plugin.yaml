@@ -1,0 +1,9 @@
+name: crypto
+version: 0.1.0
+description: >-
+  Live cryptocurrency market data under the `crypto` toolset — spot price, true
+  24h/7d change, OHLC history, and price alerts. Keyless: every source is a
+  public read-only endpoint, tried in a fallback chain (Kraken, Hyperliquid,
+  Binance, Coinbase, CoinGecko), so there is nothing to leak and nothing to
+  rotate.
+author: alek

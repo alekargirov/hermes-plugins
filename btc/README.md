@@ -14,8 +14,19 @@ to the app's `/api/agent/tools`; every judgement lives in the app.
 ## Env (per profile `.env`)
 
 ```
-BTC_URL=http://btc:3024          # or https://btc.dev.pica.win
+BTC_URL=http://btc:3024          # container-to-container on tfk-net
 BTC_TOOL_KEY=<btc-srv TOOL_ENDPOINT_KEY>
+```
+
+**Which URL.** From an agent container on `tfk-net`, use `http://btc:3024`. A
+public `https://btc.dev.pica.win` from inside the network hairpins through
+traefik and 404s — the same trap that sent every vita3 call to port 80 for
+hours. Use the public address only from a host that is genuinely outside.
+
+Get the key with:
+
+```bash
+grep '^TOOL_ENDPOINT_KEY=' /home/apps/btc-srv/.env.secrets
 ```
 
 Single-user, so there is no `BTC_USER_ID`.

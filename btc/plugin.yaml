@@ -1,0 +1,4 @@
+name: btc
+version: 2026-08-20.1
+description: BTC/ETH position portal — live market snapshot with staleness, pasted analysis, position, and the thesis rail.
+entrypoint: __init__.py

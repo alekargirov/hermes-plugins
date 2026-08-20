@@ -81,8 +81,12 @@ def test_every_plugin_is_discovered():
     red at HEAD since — which is the guard working, just unheeded. `crypto` is
     the second keyless plugin after `weather`: live market data, because a model
     answering "what's BTC at" from its training data is confidently wrong.
+
+    12 -> 13 on 2026-08-20: `btc` bridges btc-srv, the BTC/ETH position portal.
+    Unlike `crypto` it holds opinions rather than quotes — a standing thesis, the
+    evidence under it, and alek's actual position. See claude/apps/btc-srv.
     """
-    assert len(PLUGIN_DIRS) == 12, [d.name for d in PLUGIN_DIRS]
+    assert len(PLUGIN_DIRS) == 13, [d.name for d in PLUGIN_DIRS]
 
 
 @pytest.mark.parametrize("d", PLUGIN_DIRS, ids=lambda d: d.name)
